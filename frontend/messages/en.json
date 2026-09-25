@@ -1,0 +1,157 @@
+{
+  "nav": {
+    "home": "Home",
+    "trips": "Trips",
+    "services": "Services",
+    "contact": "Contact",
+    "collective": "Collective",
+    "myTrips": "My Trips",
+    "logOut": "Log out",
+    "logIn": "Log in",
+    "browseTrips": "Browse Trips",
+    "ourServices": "Our Services",
+    "account": "Account"
+  },
+  "auth": {
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "forgotPassword": "Forgot password?",
+    "rememberMe": "Remember me",
+    "logIn": "Log in",
+    "fullNameLabel": "Full name",
+    "signUp": "Sign up",
+    "modalTitle": "Log in or sign up",
+    "or": "or",
+    "consent": "By continuing, you agree to our Terms of Service and Privacy Policy."
+  },
+  "errors": {
+    "invalidCredentials": "Incorrect email or password.",
+    "emailAlreadyRegistered": "An account with this email already exists.",
+    "tripFull": "This trip is full.",
+    "notFound": "We couldn't find what you were looking for.",
+    "validationError": "Please check the highlighted fields.",
+    "unauthorized": "Please log in to continue.",
+    "forbidden": "You don't have access to that.",
+    "rateLimited": "Too many attempts — please try again in a moment.",
+    "conflict": "That didn't go through — please try again.",
+    "generic": "Something went wrong. Please try again."
+  },
+  "footer": {
+    "subscribeSuccess": "You're subscribed — see you at the start line.",
+    "subscribeError": "Couldn't subscribe right now. Please try again.",
+    "emailPlaceholder": "Your email",
+    "subscribe": "Subscribe",
+    "tagline": "Small-group travel built around a race or a route, not a hotel package.",
+    "newsletterHint": "No spam. Unsubscribe anytime.",
+    "newsletter": "Newsletter",
+    "newsletterBody": "Race drops and route scouts, straight to your inbox.",
+    "rightsReserved": "All rights reserved."
+  },
+  "forgotPassword": {
+    "pageTitle": "Forgot your password?",
+    "checkYourEmail": "If an account exists for that email, we've sent a reset link.",
+    "emailLabel": "Email",
+    "submit": "Send reset link"
+  },
+  "trips": {
+    "pageTitle": "Trips",
+    "pageSubtitle": "Small-group running journeys built around the world's most evocative racecourses and trails.",
+    "resultsCount": "{count, plural, =0 {No trips} one {# trip} other {# trips}}",
+    "emptyTitle": "No trips match your filters",
+    "emptyDescription": "Try a different distance, or clear your search.",
+    "searchPlaceholder": "Search by region, country, or race name…",
+    "allDistances": "All distances",
+    "upcoming": "Upcoming",
+    "past": "Past"
+  },
+  "account": {
+    "pageTitle": "My Trips",
+    "greeting": "Welcome back, {name}.",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "emptyTitle": "No trips here yet",
+    "emptyDescription": "Once you book a trip, it'll show up here.",
+    "participants": "participants",
+    "status": {
+      "pending": "Pending",
+      "awaiting_payment": "Awaiting payment",
+      "confirmed": "Confirmed",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
+    }
+  },
+  "home": {
+    "featuredTripsHeadline": "Featured expeditions"
+  },
+  "profile": {
+    "pageTitle": "Travel profile",
+    "pageSubtitle": "A few details we'll need on race day — fill these in once and we'll reuse them for every booking.",
+    "basicInfo": "Basic info",
+    "fullName": "Full name",
+    "phone": "Phone",
+    "dateOfBirth": "Date of birth",
+    "nationality": "Nationality",
+    "passportNumber": "Passport number",
+    "shirtSize": "Shirt size",
+    "emergencyContactName": "Emergency contact name",
+    "emergencyContactPhone": "Emergency contact phone",
+    "save": "Save changes",
+    "saveSuccess": "Profile saved."
+  },
+  "tripDetail": {
+    "selectCategory": "Select a race",
+    "participants": "Participants",
+    "decrease": "Remove a participant",
+    "increase": "Add a participant",
+    "total": "Total",
+    "full": "Full",
+    "bookNow": "Book now"
+  },
+  "checkout": {
+    "modalTitle": "Complete your booking",
+    "totalDue": "Total due: €{total}",
+    "participant": "Participant",
+    "fullName": "Full name",
+    "nationality": "Nationality (optional)",
+    "shirtSize": "Shirt size (optional)",
+    "continueToPayment": "Continue to payment",
+    "paymentFailed": "Payment failed. Please try again.",
+    "pay": "Pay now",
+    "success": "You're booked! Redirecting to your trips…"
+  },
+  "contact": {
+    "pageTitle": "Get in touch",
+    "pageSubtitle": "Connect directly with our race operations team. We respond within 24 hours.",
+    "signInToSend": "Log in to send us a message.",
+    "logInCta": "Log in",
+    "sendSuccess": "Message sent — we'll be in touch soon.",
+    "inquiryType": "What's this about?",
+    "inquiryTypes": {
+      "general": "General question",
+      "booking": "An existing booking",
+      "custom_trip": "A custom trip",
+      "press": "Press"
+    },
+    "message": "Message",
+    "messageRequired": "Please enter a message.",
+    "send": "Send message"
+  },
+  "resetPassword": {
+    "pageTitle": "Reset your password",
+    "success": "Your password has been reset.",
+    "backToHome": "Back to home",
+    "invalidLink": "This reset link is invalid or has expired.",
+    "newPasswordLabel": "New password",
+    "submit": "Reset password"
+  },
+  "newsletterUnsubscribe": {
+    "success": "You've been unsubscribed. Sorry to see you go.",
+    "error": "This unsubscribe link is invalid or has expired.",
+    "backToHome": "Back to home"
+  },
+  "verifyEmail": {
+    "success": "Your email is verified.",
+    "error": "This verification link is invalid or has expired.",
+    "backToHome": "Back to home"
+  }
+}

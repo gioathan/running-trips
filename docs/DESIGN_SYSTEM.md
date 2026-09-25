@@ -1,5 +1,8 @@
 # Design System — "Athletic Editorial Runner"
 
+Status: **implemented** in `frontend/` (Tailwind config, components).
+Logo assets are still the one open item — see below.
+
 Brand: **ΑΛΛΟΥ**. Two logo assets pending (full logo + a small mark, the
 mark used in most placements — see FRONTEND_PLAN.md §5 for exactly where
 each is used); this doc's tokens/components don't depend on the logo files
@@ -153,7 +156,10 @@ export default {
         'label-sm': ['10px', { lineHeight: '12px', letterSpacing: '0.16em', fontWeight: '700' }],
         'metric-display': ['48px', { lineHeight: '48px', letterSpacing: '-0.04em', fontWeight: '800' }],
       },
-      borderRadius: { sm: '2px', DEFAULT: '4px', md: '6px', lg: '8px', xl: '12px', full: '9999px' },
+      // `md` fixed to 10px (was 6px) to match this doc's own "Cards &
+      // Modules: Explicit 10px (rounded-md)" line above — the two
+      // disagreed; 10px is what actually shipped in frontend/.
+      borderRadius: { sm: '2px', DEFAULT: '4px', md: '10px', lg: '8px', xl: '12px', full: '9999px' },
       spacing: { xs: '4px', sm: '8px', md: '16px', lg: '24px', xl: '40px' },
       boxShadow: { hard: '2px 2px 0 0 #14161A' },
     },

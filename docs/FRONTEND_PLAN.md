@@ -1,8 +1,12 @@
 # Frontend Plan — Running Trips Platform
 
-Status: planning draft, informed by the Figma templates (file
+Status: **implemented** — `frontend/` matches this document (see
+`frontend/README.md` for setup, the auth-proxy architecture, and
+verification notes). Originally informed by the Figma templates (file
 `KD9K5ul4JXrKAtijVk4xPj`) and `docs/DESIGN_SYSTEM.md`. Pairs with
-`docs/BACKEND_PLAN.md`.
+`docs/BACKEND_PLAN.md`. A few sections below were amended after
+implementation surfaced gaps or simplifications not caught during planning
+— same approach as the backend plan's own reconciliation pass.
 
 ## 1. What the Figma file covers vs. what we design fresh
 
@@ -28,11 +32,11 @@ sidebar components.
 | Framework | Next.js (App Router, TypeScript) | SSR/ISR for content pages, matches backend plan's caching split |
 | i18n | next-intl | locale-prefixed routing (`/en`, `/el`), confirmed approach |
 | Styling | Tailwind CSS | maps 1:1 to the token table in `DESIGN_SYSTEM.md` |
-| Component base | shadcn/ui (headless, copy-in) restyled to tokens | gets accessible primitives (dialog, select, tabs, dropdown) for free instead of hand-building the login modal, filter dropdown, etc. — visual layer is fully overridden by our tokens, so it doesn't fight the editorial look |
+| Component base | Radix UI primitives (`@radix-ui/react-*`) restyled to tokens | gets accessible primitives (dialog, select, tabs, accordion, checkbox) for free instead of hand-building the login modal, filter dropdown, FAQ accordion, etc. — visual layer is fully overridden by our tokens, so it doesn't fight the editorial look. Shipped as **Radix directly**, not the shadcn CLI, since shadcn's `init`/`add` generator needs npm registry access to scaffold its wrapper files — functionally the same outcome (shadcn's own components are Radix + Tailwind under the hood), just without its specific file-generation step. |
 | Forms | react-hook-form + zod | matches the field-heavy contact/booking/admin forms |
 | Server state | Next.js fetch cache (public content) + a thin fetch wrapper; no client cache library needed for a site this size (no React Query) | avoids a dependency the traffic level doesn't justify |
 | Payments UI | Stripe.js + Elements | pairs with backend's PaymentIntent flow |
-| Auth cookie handling | Next.js Route Handlers proxy `/api/*` → FastAPI, same-origin | per backend plan §6 — keeps refresh token `httpOnly` without cross-site cookie issues |
+| Auth cookie handling | Next.js Route Handlers proxy `/api/*` → FastAPI, same-origin | per backend plan §6 — keeps refresh token `httpOnly` without cross-site cookie issues. Implemented as **two** parallel proxy pairs (`/api/auth/*` + `/api/backend/*` for users, `/api/admin-auth/*` + `/api/admin-backend/*` for admin) rather than one — see `frontend/README.md`'s "Auth architecture" section for why: it mirrors the backend's own separate refresh-token tables so a user session can never be valid against an admin endpoint. |
 
 ## 3. Design system
 
@@ -55,6 +59,7 @@ deliberately dark surface on the site.
 /[locale]/forgot-password
 /[locale]/reset-password
 /[locale]/verify-email
+/[locale]/newsletter/unsubscribe   token-link landing page — not in the original list, but needed as the target of the unsubscribe email link
 /admin/login                       separate path, no locale prefix (internal tool)
 /admin/...                         admin dashboard (see §8)
 ```
@@ -72,7 +77,11 @@ a component this contained.
   mark** on mobile (header is height-constrained there) — nav links (Home /
   Trips / Services / Contact), right side: locale switcher, "Log in" link +
   primary CTA button when signed out, profile avatar dropdown (My Trips /
-  Profile / Log out) when signed in.
+  Profile / Log out) when signed in. Shipped with a **text placeholder**
+  (`ΑΛΛΟΥ` / `Α`) standing in for both logo variants — the real asset files
+  were never provided during the build; swapping in `next/image` for both
+  spots in `components/layout/Header.tsx` and `Footer.tsx` once they land
+  is a two-line change, no restructuring.
 - **Footer** (dark, per your preference — see DESIGN_SYSTEM.md): **small
   mark** (dark surface has less room than the hero-adjacent desktop header),
   brand blurb, contact info, 3 link columns (sourced from `site_settings`,
@@ -100,8 +109,12 @@ Buttons (primary/highlight/secondary/ghost), Trip Card, Service Widget Card
 (icon+title+body, used for the 5-pillar/services grid), Stat Band
 (label/value pairs), Testimonial Card, FAQ Accordion Item, Comparison Table,
 Steps/Timeline list, CTA Banner, Chip/Badge (category tag, "Full" badge,
-"Featured" badge), Filter Bar (status tabs + search + distance multi-select
-pills), Form Inputs (text/textarea/select/
+"Featured" badge), Filter Bar (status tabs + search + distance pills —
+**single-select**, not multi-select: `GET /trips?category=` only accepts
+one slug, and faking multi-select client-side without backend support
+would just be misleading UI. Extending the backend to accept repeated
+`category=` params, OR'd together, is the way to add real multi-select
+later), Form Inputs (text/textarea/select/
 checkbox/radio per DESIGN_SYSTEM.md), Pagination control, Empty state,
 Toast/notification, Modal shell, Admin data table, Admin sidebar nav.
 
@@ -131,11 +144,24 @@ no backend changes either way. Each card: image, date range or
 **Trip detail (`/trips/[slug]`, new)** — Image gallery, title/dates/
 location, category selector (chips, each showing its `trip_categories`
 price), participant count stepper, sticky booking widget (desktop
-sidebar / mobile bottom sheet) showing running total → "Book Now" (opens
-login modal if signed out, else proceeds to booking form → travel-profile
-completion if needed → Stripe Elements payment), full `description`,
-complete `trip_inclusions` list, related trips (same primary race
-category).
+sidebar) showing running total → "Book Now" (opens login modal if signed
+out, else opens a checkout modal), full `description`, complete
+`trip_inclusions` list.
+  - **Checkout flow as shipped**: a 2-step modal (`CheckoutModal.tsx`) —
+    per-participant name/nationality/shirt-size form → `POST /bookings` →
+    `POST /payments/create-intent` → Stripe `PaymentElement`. Simplified
+    from the original "proceeds to booking form → travel-profile
+    completion if needed" idea: rather than requiring the account-level
+    travel profile to be complete first, checkout just collects a reduced
+    field set inline every time. Trade-off: faster/simpler checkout, at
+    the cost of not reusing saved travel-profile data automatically —
+    prefilling from `GET /users/me/travel-profile` when signed in would
+    close that gap.
+  - **Not shipped**: mobile bottom-sheet variant of the booking widget
+    (renders as a normal sticky sidebar block on mobile too — still
+    usable, just not the distinct mobile treatment originally sketched),
+    and "related trips" (same primary race category) at the bottom of the
+    page.
 
 **Services** — Widget grid (5 cards, from Figma variant 1), comparison
 table (Standard vs. Us — optional, nice-to-have), FAQ (from variant 2),
@@ -150,8 +176,15 @@ context (pre-filled when arriving from a trip page — sets
 user, not re-entered.
 
 **My Trips (`/account`, new, auth required)** — Tabs: Upcoming / Past,
-reusing the trip card component in a compact row layout, booking status
-badge, link into booking detail.
+compact booking rows with a status badge, linking to the trip page. No
+dedicated booking-detail page was built (`GET /bookings/{id}` exists on
+the backend and is unused by the frontend) — the row itself shows enough
+(trip, date, participant count, status) that a detail page wasn't
+essential for v1; add `/account/bookings/[id]` if that changes. Also
+added: a "basic info" form (full name, phone — `PATCH /users/me`) above
+the travel-profile form on `/account/profile`, since the original plan
+only covered travel details and there was otherwise no way to edit your
+name after signup.
 
 **Login/Signup, Forgot/Reset password, Verify email** — modal + 2 minimal
 standalone pages for the email-link flows (can't be modals since they're
@@ -165,28 +198,55 @@ for primary actions and status highlights) but utility layout:
 
 - **Shell**: fixed left sidebar (logo mark, nav sections) + topbar (search,
   admin profile menu) + content area.
-- **Sidebar sections**: Dashboard (stat tiles: bookings this month, revenue,
-  active subscribers), Trips (+ Race Categories), Bookings, Payments,
-  Content Pages, Site Settings, Newsletter Subscribers, Contact Messages.
+- **Sidebar sections**: Dashboard, Trips (+ Race Categories), Bookings,
+  Payments, Content Pages, Site Settings, Newsletter Subscribers, Contact
+  Messages.
 - **List views**: data table, server-paginated, column filters/search,
   row actions.
 - **Edit views**: form per entity; translatable entities (trips, race
   categories, trip inclusions, content sections) show an **EN/EL tab
   switcher** at the top of the form, editing both `*_translations` rows in
   one save (matches backend §10's "admin returns/accepts all locales at
-  once"). Trip form includes a dynamic add/remove list for inclusion
-  bullets and a drag-reorderable image gallery (uploads via the R2 presign
-  flow — `POST /admin/uploads/presign` from BACKEND_PLAN.md).
+  once").
 - **Auth**: separate login at `/admin/login` (backend §5/§6's
   `/admin/auth/*`), no Google OAuth, own session — this route is excluded
   from the public sitemap/nav entirely.
+
+**Status per sidebar section, as shipped** — built to a "representative
+module, fully done" depth (Trips) plus everything else that was
+low-effort/high-value given existing backend support, same spirit as the
+backend's own audit-log pattern:
+
+| Section | Status |
+|---|---|
+| Dashboard | Stat tiles wired to real counts (trips, confirmed bookings, subscribers, new contact messages) via existing paginated endpoints' `total` field — no dedicated stats endpoint needed. |
+| Trips | **Fully built** — list, create, edit (EN/EL tabs, categories), plus images and inclusions management. This is the pattern to copy for Race Categories/Content Pages. |
+| Bookings | Built — list + inline status change. |
+| Newsletter Subscribers | Built — list. |
+| Contact Messages | Built — list + inline status change. |
+| Race Categories | **Stub only** (backend CRUD exists) — same EN/EL form pattern as Trips, much smaller. |
+| Content Pages | **Stub only** (backend CRUD exists) — needs a per-slug editor with an add/remove/reorder section list, each section type keyed to `components/site/sections/types.ts`'s shapes. |
+| Site Settings | **Stub only** (backend CRUD exists) — a simple key/value editor would cover it. |
+| Payments | **Stub only** — and blocked on the backend: no `GET /admin/payments` list endpoint exists yet (`payments/router.py` only has create-intent, get-by-id, and the webhook). |
+
+Trip image management shipped as a **manual URL-paste field**, not the
+originally-planned drag-reorderable gallery wired to the R2 presign flow —
+`POST /admin/uploads/presign` works and is ready to call, but no
+`<input type="file">` → presign → PUT-to-R2 → save-URL flow was wired up
+in `TripImagesManager.tsx`. That's the next piece of work there.
 
 ## 9. Data fetching & caching (recap, ties to BACKEND_PLAN.md)
 
 - Public content pages (Home, Services, Contact copy, Destinations listing,
   Trip detail): Next.js ISR, short revalidate window + on-demand
   revalidation triggered by the admin's save (backend calls a
-  `/api/revalidate` route handler with a shared secret).
+  `/api/revalidate` route handler with a shared secret). The route handler
+  itself is built (`POST /api/revalidate`, secret-checked, calls
+  `revalidatePath`) — the backend side of this (calling out to it after a
+  content save) was **not** wired up, so it's relying on the short ISR
+  window alone for now. Low priority: `content/service.py`'s
+  `update_page`/`update_site_settings` would need an HTTP call to
+  `${FRONTEND_URL}/api/revalidate` with the shared secret.
 - Identity/money/admin routes (login, My Trips, booking, payment, all of
   `/admin`): `force-dynamic`/`no-store`, always fresh, hit the API through
   the same-origin proxy with credentials.
@@ -218,8 +278,14 @@ for primary actions and status highlights) but utility layout:
 
 ## 12. Next steps
 
-Scaffold `frontend/` (Next.js app, Tailwind config from DESIGN_SYSTEM.md,
-next-intl setup, shared layout components) once the logo files are in
-hand, in parallel with or after the `backend/` scaffold from
-BACKEND_PLAN.md §12. Placeholder copy is fine to start — real tagline/copy
-can land later without restructuring anything.
+Frontend is built — see `frontend/README.md` for setup, the auth-proxy
+architecture, and verification notes (same network-sandbox caveat as the
+backend: nothing here could be `npm install`ed or run live in this
+environment; verified via TypeScript syntax parsing, an unused-import
+sweep, and programmatic EN/EL message-key parity checks instead).
+
+Remaining work, roughly in priority order: real Google/Stripe keys and a
+live end-to-end run; the real logo assets; the admin upload-widget flow;
+Race Categories/Content Pages/Site Settings admin screens; a
+`GET /admin/payments` backend endpoint plus its admin screen; wiring the
+backend's content-save path to call `/api/revalidate`.
