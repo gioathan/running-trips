@@ -122,10 +122,13 @@ Cross-cutting:
 **Catalog**
 - `race_categories(id, slug UNIQUE, created_at)` — admin-defined, e.g. "5km", "10km", "Half Marathon". Slug is shared across locales (e.g. `10km`), not translated.
 - `race_category_translations(id, race_category_id FK, locale, name)` — UNIQUE`(race_category_id, locale)`.
-- `trips(id, slug UNIQUE, cover_image_url, location_city, location_country, start_date, end_date, capacity, is_full_override BOOL, status ENUM[draft,published,archived], created_at, updated_at)`
+- `trips(id, slug UNIQUE, cover_image_url, location_city, location_country, start_date, end_date, capacity, is_full_override BOOL, is_featured BOOL DEFAULT false, status ENUM[draft,published,archived], created_at, updated_at)`
   - `is_full_override`: admin can force "Full" to display even if seats remain — per your spec, this is a display flag, not derived purely from capacity math.
+  - `is_featured`: lets admin curate which trips surface in the homepage's highlight/dossier section, independent of recency.
   - `slug` is one shared value used under both `/en/...` and `/el/...` URLs (confirmed) — simpler schema, no per-locale uniqueness/routing complexity.
-- `trip_translations(id, trip_id FK, locale, title, description RICHTEXT/markdown, meta_description)` — UNIQUE`(trip_id, locale)`.
+- `trip_translations(id, trip_id FK, locale, title, summary, description RICHTEXT/markdown, meta_description, duration_label NULLABLE)` — UNIQUE`(trip_id, locale)`.
+  - `summary`: short (~160 char) card-view text — distinct from the long-form `description` shown on the trip detail page.
+  - `duration_label`: optional free-text override for the card's "X DAYS / Y STAGES"-style line; falls back to a computed date range (`end_date - start_date`) when empty, so admin doesn't have to fill it for simple single-day races.
 - `trip_categories(id, trip_id FK, race_category_id FK, price, capacity NULLABLE)` — join table carrying per-category price/capacity (a trip offering both 10km and 5km can price them differently). Not translatable — race category name comes from `race_category_translations`.
 - `trip_images(id, trip_id FK, url, sort_order, alt_text)` — `alt_text` only needs a translation if you care about accessibility SEO per locale; can add `trip_image_translations(image_id, locale, alt_text)` later if needed, skip for v1.
 - `trip_inclusions(id, trip_id FK, icon NULLABLE, sort_order)` — the variable-length "bullets" of what's included, admin adds/removes freely.
@@ -140,11 +143,13 @@ Cross-cutting:
 - `pages(id, slug UNIQUE e.g. "home"/"services"/"contact")` — not translatable itself, just the container.
 - `content_sections(id, page_id FK, type ENUM[hero,widget_list,richtext,faq,...], sort_order)` — layout/order is shared across locales; only the text inside moves per language.
 - `content_section_translations(id, section_id FK, locale, data JSONB)` — the actual widget content (headings, body text, card labels, etc.) per language. Admin edit screen for a page loads both locale rows side by side.
+  - Concrete `content_sections.type` catalogue (extensible, each shapes its own `data`): `hero`, `widget_list` (icon+title+body cards — services page, homepage pillars), `stats_band` (label/value pairs — quick metrics), `testimonials` (quote+name+role+avatar list), `faq` (question/answer list — reused on contact and services pages), `comparison_table` (rows of feature vs. plan columns), `steps` (ordered how-it-works list), `cta_banner` (heading+body+button×2), `richtext`. Every page is just an ordered stack of these — no page-specific backend code needed for new marketing sections.
 - `site_settings(key TEXT PRIMARY KEY, value JSONB)` — for settings with user-facing text (footer copy, newsletter widget copy), `value` itself is locale-keyed, e.g. `{"en": "...", "el": "..."}`; for non-textual settings (social links, contact email) `value` is just the raw value. Simple enough not to need its own translation table.
 
 **Engagement**
 - `newsletter_subscribers(id, email UNIQUE, subscribed_at, unsubscribed_at NULLABLE, source)`
-- `contact_messages(id, user_id FK, subject, message, status ENUM[new,replied,archived], created_at)`
+- `contact_messages(id, user_id FK, inquiry_type ENUM[general,booking,custom_trip,press], trip_id FK NULLABLE, message, status ENUM[new,replied,archived], created_at)`
+  - `trip_id`: set when the message originates from a "contact us about this trip" link on a trip page, null otherwise. `full_name`/`email` aren't stored separately — they come from the authenticated `user` (contact form is user-only, per your spec), keeping one source of truth for contact details.
 
 **Ops**
 - `audit_log(id, admin_user_id FK, action, entity_type, entity_id, diff JSONB, created_at)` — worth having from day one once you have an admin panel touching money and content.
@@ -162,7 +167,7 @@ Cross-cutting:
 Auth (`public`):
 ```
 POST /auth/signup
-POST /auth/login
+POST /auth/login                  # body includes remember_me: bool — governs refresh-token TTL (session-length vs. long-lived)
 POST /auth/google                 # exchange Google id_token
 POST /auth/refresh
 POST /auth/logout
@@ -203,7 +208,7 @@ DELETE /admin/race-categories/{id}
 
 Trips (`public` read, `admin` write):
 ```
-GET    /trips?status=upcoming|past&category=10km&page=&page_size=   # paginated + filtered, locale-resolved title/description
+GET    /trips?status=upcoming|past&category=10km&q=&page=&page_size=   # paginated + filtered, locale-resolved title/description; q = free-text search over title/location (simple ILIKE, or pg_trgm if relevance matters later)
 GET    /trips/{slug}                       # locale-resolved
 POST   /admin/trips                        # body includes translations: {en:{title,description,meta_description}, el:{...}}
 PATCH  /admin/trips/{id}
@@ -390,5 +395,9 @@ frontend plan.
 
 Scaffold `backend/`: FastAPI app skeleton, Docker Compose with `api` +
 `postgres` + `redis`, Alembic init, first migration covering the schema in
-§4 (including the `*_translations` tables). Then move to the frontend
-(Next.js + next-intl) plan.
+§4 (including the `*_translations` tables). See `docs/FRONTEND_PLAN.md` and
+`docs/DESIGN_SYSTEM.md` for the Next.js side — several §4/§5 schema fields
+above (`trips.is_featured`, `trip_translations.summary`/`duration_label`,
+`contact_messages.inquiry_type`/`trip_id`, `?q=` search) were added after
+reviewing the provided Figma templates, to match what the UI actually needs
+to render.
