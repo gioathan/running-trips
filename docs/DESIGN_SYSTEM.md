@@ -1,8 +1,14 @@
 # Design System — "Athletic Editorial Runner"
 
+Brand: **ΑΛΛΟΥ**. Two logo assets pending (full logo + a small mark, the
+mark used in most placements — see FRONTEND_PLAN.md §5 for exactly where
+each is used); this doc's tokens/components don't depend on the logo files
+landing.
+
 Source: Figma file `KD9K5ul4JXrKAtijVk4xPj` (templates: Home, Destinations,
 Services ×2, Contact, Login/Signup — desktop + mobile) plus the design-system
-spec you provided directly.
+spec you provided directly. All copy shown in the Figma file is placeholder
+("AALOY") — not the real brand.
 
 ## Brand voice
 
@@ -15,20 +21,16 @@ radius cards.
 
 ## Color tokens
 
-> **Note on the two color lists you provided**: the YAML `colors:` block
-> reads like a full exported Material-3 tonal palette (includes
-> `on-*`/`*-container`/`*-fixed` roles for every color, plus `error` and
-> `tertiary` which the brand prose never mentions). The prose "Colors"
-> section is the hand-authored, practical spec — it's what the component
-> descriptions (buttons, cards, chips) actually reference, and its hex
-> values don't all line up 1:1 with the YAML's `primary`/`secondary` roles
-> (e.g. the prose's primary action color `#D686EA` is the YAML's
-> `primary-container`, not its `primary`). I'm treating **prose as the
-> source of truth for the 6 functional brand colors** below, and pulling
-> from the YAML ramp only for roles the prose doesn't define (error state,
-> disabled, elevated/inverse surfaces). Flag it if you'd rather reconcile
-> these into one clean palette before we build — easy to do, just wanted it
-> decided explicitly rather than picked silently.
+> **Note on the two color lists you provided** (confirmed — using the
+> hand-written list): the YAML `colors:` block reads like a full exported
+> Material-3 tonal palette (includes `on-*`/`*-container`/`*-fixed` roles
+> for every color, plus `error` and `tertiary` which the brand prose never
+> mentions), and its hex values don't all line up 1:1 with the prose's 6
+> named colors (e.g. the prose's primary action color `#D686EA` is the
+> YAML's `primary-container`, not its `primary`). Per your call, the prose
+> is the source of truth for the 6 functional brand colors below; the YAML
+> ramp is only used for roles the prose doesn't define (error state,
+> disabled, elevated/inverse surfaces).
 
 **Core (prose, authoritative for UI)**
 

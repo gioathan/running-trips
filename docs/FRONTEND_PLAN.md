@@ -15,7 +15,11 @@ Not in the file — designed here, reusing the same tokens/components:
 dashboard**, forgot/reset-password screens, verify-email screen.
 
 All copy in the file is placeholder ("AALOY" / "Travel Beyond The Finish
-Lines") — treated as structural reference, not real content.
+Lines") — treated as structural reference, not real content. **Real brand
+name: ΑΛΛΟΥ.** Two logo assets incoming (full + a small mark, the latter
+used in most placements) — see §5 for where each is used; no plan changes
+needed once the files land, they just slot into the header/footer/admin
+sidebar components.
 
 ## 2. Stack
 
@@ -64,14 +68,23 @@ a component this contained.
 
 ## 5. Shared layout
 
-- **Header** (from Figma): logo, nav links (Home / Trips / Services /
-  Contact), right side: locale switcher, "Log in" link + primary CTA button
-  when signed out, profile avatar dropdown (My Trips / Profile / Log out)
-  when signed in.
-- **Footer** (dark, per your preference — see DESIGN_SYSTEM.md): brand
-  blurb, contact info, 3 link columns (sourced from `site_settings`, not
-  hardcoded — admin-editable), newsletter signup form (no auth, dedupes
+- **Header** (from Figma): logo — **full logo** on desktop, **small
+  mark** on mobile (header is height-constrained there) — nav links (Home /
+  Trips / Services / Contact), right side: locale switcher, "Log in" link +
+  primary CTA button when signed out, profile avatar dropdown (My Trips /
+  Profile / Log out) when signed in.
+- **Footer** (dark, per your preference — see DESIGN_SYSTEM.md): **small
+  mark** (dark surface has less room than the hero-adjacent desktop header),
+  brand blurb, contact info, 3 link columns (sourced from `site_settings`,
+  not hardcoded — admin-editable), newsletter signup form (no auth, dedupes
   server-side), bottom bar with copyright + legal links.
+- Logo usage elsewhere: **small mark** for the browser favicon, the admin
+  sidebar (all states — sidebar is narrow), and any place the brand appears
+  at a small size (loading states, email header). **Full logo** reserved for
+  header (desktop) and anywhere with room to breathe (e.g. the login modal
+  header, per the Figma layout, and an "about" section if one gets added
+  later). Default to the small mark when in doubt — it's the one "mostly
+  used," per your note.
 - **Mobile bottom nav** (5 tabs, sticky, from Figma): Home / Trips /
   Services / Contact / Account (Account tab routes to login modal if
   signed out, My Trips if signed in). Desktop header hides this; mobile
@@ -88,7 +101,7 @@ Buttons (primary/highlight/secondary/ghost), Trip Card, Service Widget Card
 (label/value pairs), Testimonial Card, FAQ Accordion Item, Comparison Table,
 Steps/Timeline list, CTA Banner, Chip/Badge (category tag, "Full" badge,
 "Featured" badge), Filter Bar (status tabs + search + distance multi-select
-pills + optional season dropdown), Form Inputs (text/textarea/select/
+pills), Form Inputs (text/textarea/select/
 checkbox/radio per DESIGN_SYSTEM.md), Pagination control, Empty state,
 Toast/notification, Modal shell, Admin data table, Admin sidebar nav.
 
@@ -101,16 +114,17 @@ Pagination, admin components) which are driven by their own API resources.
 **Home** — Hero (headline/CTA/stat strip, from Figma), Brand
 Philosophy (3-pillar widget_list), Featured Trips (query
 `GET /trips?featured=true`, uses `trips.is_featured` — new backend field),
-Route/Telemetry Showcase (generic `stats_band` content section — not
-tied to real per-trip data, purely a marketing widget), Testimonials,
-two CTA banners. All non-trip-data sections driven by
-`GET /content/pages/home`.
+Testimonials (3-quote strip), CTA banner. All non-trip-data sections driven
+by `GET /content/pages/home`. (Correction from an earlier pass: the
+route-elevation stats widget lives only on the Destinations page in the
+Figma file, not Home — and per §11 it's out of scope for v1 anyway.)
 
 **Destinations (`/trips`)** — Status tabs (Upcoming/Past), live search
-(`?q=`), distance multi-select pills (backed by `race_categories`), season
-dropdown (**optional** — computed month-range filter, no schema change; can
-ship without it and add later without any backend work), results count,
-paginated card grid, empty state. Each card: image, date range or
+(`?q=`), distance multi-select pills (backed by `race_categories`), results
+count, paginated card grid, empty state. Skipping the season-dropdown filter
+and the decorative route-elevation stats box seen in the Figma file for
+v1 (confirmed) — neither is in scope; easy to add later since they'd need
+no backend changes either way. Each card: image, date range or
 `duration_label`, title, `summary`, race-category chips, first N
 `trip_inclusions`, "Full" badge when `is_full_override`, link to detail.
 
@@ -190,22 +204,22 @@ for primary actions and status highlights) but utility layout:
 - `<html lang>` per route, `hreflang` alternates between `/en/x` and
   `/el/x`, locale-aware sitemap.
 
-## 11. Open flags for you
+## 11. Decisions locked in
 
-1. **Brand name/domain** — placeholder "AALOY" throughout the Figma file;
-   need the real name, wordmark asset, and tagline before final copy (not
-   blocking the plan, just noting it).
-2. **Color token reconciliation** — see the callout in `DESIGN_SYSTEM.md`;
-   I used the hand-written brand prose as source of truth over the YAML
-   Material export where they disagree. Say if you'd rather reconcile them
-   differently.
-3. **Season filter & the route-elevation "telemetry" widget** — both are
-   nice-to-haves from the Figma file, not in your original spec. Flagged as
-   optional in §7 — easy to drop without touching the backend either way.
+- **Brand**: ΑΛΛΟΥ (confirmed). Two logo assets incoming — full logo and a
+  small mark, the small mark used in most placements (see §5 for exactly
+  where each goes). Tagline/copy still TBD — not blocking, placeholder copy
+  is fine until real copy is ready.
+- **Color tokens**: hand-written brand prose is the source of truth
+  (confirmed) — see `DESIGN_SYSTEM.md`'s callout for the full reasoning.
+- **Season filter & route-elevation stats widget**: skipped for v1
+  (confirmed) — neither was in your original spec; can be added later
+  without any backend changes.
 
 ## 12. Next steps
 
-Once brand name/copy direction is settled (or you're fine proceeding with
-placeholders): scaffold `frontend/` (Next.js app, Tailwind config from
-DESIGN_SYSTEM.md, next-intl setup, shared layout components), in parallel
-with or after the `backend/` scaffold from BACKEND_PLAN.md §12.
+Scaffold `frontend/` (Next.js app, Tailwind config from DESIGN_SYSTEM.md,
+next-intl setup, shared layout components) once the logo files are in
+hand, in parallel with or after the `backend/` scaffold from
+BACKEND_PLAN.md §12. Placeholder copy is fine to start — real tagline/copy
+can land later without restructuring anything.
