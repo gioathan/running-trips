@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 
-from app.core.dependencies import DbSession, rate_limit
+from app.core.dependencies import DbSession, get_current_admin, rate_limit
 from app.modules.admin_auth import service
 from app.modules.admin_auth.schemas import (
     AdminAuthResponse,
@@ -9,6 +9,7 @@ from app.modules.admin_auth.schemas import (
     AdminUserPublic,
     TokenPair,
 )
+from app.modules.users.models import User
 
 router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
@@ -41,3 +42,8 @@ async def admin_refresh(body: AdminRefreshRequest, request: Request, db: DbSessi
 @router.post("/logout", status_code=204)
 async def admin_logout(body: AdminRefreshRequest, db: DbSession):
     await service.revoke_admin_refresh_token(db, body.refresh_token)
+
+
+@router.get("/me", response_model=AdminUserPublic)
+async def admin_me(current_admin: User = Depends(get_current_admin)):
+    return AdminUserPublic.model_validate(current_admin)

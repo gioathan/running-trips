@@ -65,6 +65,14 @@ primary keys, while SQLAlchemy 2.0's own DDL for `BigInteger` +
 identically at runtime; a future `--autogenerate` run may propose a no-op-ish
 diff for this — safe to accept or ignore.
 
+## Endpoints added after the initial pass
+
+`GET /admin/auth/me` — added while wiring up the frontend's admin session
+check: `GET /users/me` is deliberately role-gated to `role=user` tokens only
+(`get_current_user`), so an admin access token can't use it to fetch its own
+profile. `admin_auth/router.py` now has its own `/me`, gated by
+`get_current_admin`, returning `AdminUserPublic`.
+
 ## What's implemented vs. left as a pattern to extend
 
 Fully implemented end-to-end: auth (signup/login/refresh/logout/Google/

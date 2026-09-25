@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-canvas text-ink font-sans text-body-lg;
+  }
+
+  ::selection {
+    @apply bg-accent text-ink;
+  }
+}
+
+@layer utilities {
+  /* Hard 2px offset shadow used for active/hover lift on cards + primary
+     buttons — see docs/DESIGN_SYSTEM.md "Elevation & Depth". */
+  .shadow-hard-hover {
+    transition: box-shadow 120ms ease, transform 120ms ease;
+  }
+  .shadow-hard-hover:hover {
+    box-shadow: 2px 2px 0 0 #14161a;
+    transform: translate(-1px, -1px);
+  }
+}
