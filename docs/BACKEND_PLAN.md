@@ -1,7 +1,9 @@
 # Backend Plan — Running Trips Platform
 
-Status: planning draft. No backend code exists yet — this document defines the
-target architecture before scaffolding starts.
+Status: **implemented** — `backend/` matches this document (see
+`backend/README.md` for setup/verification notes). This doc stays the source
+of truth for the architecture; a few sections below were amended after
+implementation surfaced gaps or simplifications not caught during planning.
 
 ## 1. Scope recap
 
@@ -50,27 +52,33 @@ backend/
     main.py                    # FastAPI app, router include, middleware
     core/
       config.py                # pydantic-settings
-      security.py              # JWT, password hashing, Google token verify
-      dependencies.py          # get_db, get_current_user, require_role("admin")
+      security.py              # JWT, password hashing, opaque refresh tokens
+      dependencies.py          # get_db, get_current_user, get_current_admin, get_locale, rate_limit
       exceptions.py            # domain exceptions -> HTTP mapping
       pagination.py            # generic Page[T] schema + query params
+      i18n.py                  # translation-row resolution (requested locale -> en -> any)
+      redis.py                 # shared Redis client
     db/
       base.py                  # declarative base
       session.py               # async session factory
     modules/
       auth/          router.py  schemas.py  service.py
+      admin_auth/     router.py schemas.py service.py models.py   # separate admin session/refresh-token type
+      audit/          models.py service.py                        # audit_log writer, called from admin routers
       users/         router.py  schemas.py  service.py  models.py
       race_categories/ router.py schemas.py service.py models.py
       trips/         router.py  schemas.py  service.py  repository.py  models.py
-      bookings/      router.py  schemas.py  service.py  repository.py  models.py
+      bookings/      router.py  schemas.py  service.py  models.py
       payments/      router.py  schemas.py  service.py  stripe_client.py  models.py
       content/       router.py  schemas.py  service.py  models.py   # CMS/page builder
       newsletter/    router.py  schemas.py  service.py  models.py
       contact/       router.py  schemas.py  service.py  models.py
       uploads/       router.py  schemas.py  service.py            # R2 presign
     workers/
-      tasks.py                 # ARQ task functions
-      cron.py                  # scheduled: archive past trips, digest emails
+      tasks.py                 # ARQ task functions (transactional emails, expired-booking release)
+      worker_settings.py       # ARQ WorkerSettings — functions list + cron_jobs (arq's own cron(), no separate cron.py)
+      enqueue.py                # enqueue_job() helper called from request-path routers/services
+      email.py                  # Resend send wrapper
   alembic/
   tests/
   Dockerfile
@@ -81,7 +89,7 @@ Per module:
 - **router.py** — thin, only handles HTTP concerns + role dependency, calls
   service layer. Public and admin routes for the same resource live in the
   same module (e.g. `trips/router.py` has `GET /trips` public and
-  `POST /admin/trips` behind `require_role("admin")`) — keeps domain logic
+  `POST /admin/trips` behind `get_current_admin`) — keeps domain logic
   together instead of duplicating it across a separate "admin module".
 - **schemas.py** — Pydantic DTOs, split by direction: `TripCreate`,
   `TripUpdate`, `TripRead`, `TripListItem` (lighter, for paginated lists).
@@ -90,7 +98,9 @@ Per module:
   repositories, raises domain exceptions.
 - **repository.py** — SQLAlchemy queries only, no business logic. (Simple
   modules like `race_categories` can skip this and query directly in the
-  service — don't force the pattern where it adds no value.)
+  service — don't force the pattern where it adds no value.) In practice only
+  `trips` ended up needing one (filter/search query-building); `bookings`
+  turned out simple enough to keep its queries in `service.py`.
 - **models.py** — SQLAlchemy ORM models.
 
 Cross-cutting:
@@ -98,8 +108,12 @@ Cross-cutting:
   handlers.
 - Generic `Page[T]` response `{items, total, page, page_size}` for every
   paginated list endpoint.
-- `require_role("user" | "admin")` as a FastAPI dependency, stacked on top of
-  `get_current_user` (which itself decodes the JWT and 401s if missing/invalid).
+- Two separate FastAPI dependencies — `get_current_user` and
+  `get_current_admin` — rather than one generic `require_role(...)` factory:
+  simpler call sites (`Depends(get_current_admin)`), and it keeps user vs.
+  admin token/session handling (different cookie names, different refresh
+  token tables) visibly distinct at the type level instead of behind a shared
+  parameterized dependency.
 
 ## 4. Database schema
 
@@ -210,6 +224,8 @@ Trips (`public` read, `admin` write):
 ```
 GET    /trips?status=upcoming|past&category=10km&q=&page=&page_size=   # paginated + filtered, locale-resolved title/description; q = free-text search over title/location (simple ILIKE, or pg_trgm if relevance matters later)
 GET    /trips/{slug}                       # locale-resolved
+GET    /admin/trips                        # paginated, all locales per trip — added during implementation: the admin trip list table needs this and it was a plain oversight to leave off the original list
+GET    /admin/trips/{id}                   # all locales — backs the admin edit form
 POST   /admin/trips                        # body includes translations: {en:{title,description,meta_description}, el:{...}}
 PATCH  /admin/trips/{id}
 DELETE /admin/trips/{id}
@@ -259,7 +275,13 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
 
 ## 6. Auth flow detail
 
-- Access token: JWT, short-lived (~15 min), contains `sub`, `role`.
+- Access token: JWT, short-lived (~15 min), contains `sub`, `role`. Every
+  protected endpoint accepts it either as `Authorization: Bearer <token>` or
+  a same-named cookie (`access_token` for users, `admin_access_token` for
+  admin) — header is the primary path (send it explicitly from the Next.js
+  proxy per the recommendation below); the cookie fallback exists so a
+  request can also work if the proxy chooses to forward it as a cookie
+  instead. Only the *refresh* token strictly needs to be `httpOnly`.
 - Refresh token: opaque random value, stored **hashed** in `refresh_tokens`,
   rotated on every use, revocable (logout / "log out everywhere").
 - Delivery: recommend the Next.js app proxy auth calls through its own route
@@ -273,9 +295,17 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
 - Password reset / email verification: signed, expiring tokens, delivered via
   Resend.
 - Rate limiting on `/auth/login`, `/admin/auth/login`, `/contact`,
-  `/newsletter/subscribe` via Redis (sliding window per IP+email) to blunt
-  brute-force/spam — `/admin/auth/login` gets the strictest limit since it's
-  the highest-value target.
+  `/newsletter/subscribe` via Redis, to blunt brute-force/spam —
+  `/admin/auth/login` gets the strictest limit (5/min) since it's the
+  highest-value target; `/auth/login` 10/min, `/newsletter/subscribe` 10/min,
+  `/auth/forgot-password` 5/5min. **Shipped as a fixed window keyed on client
+  IP only** (Redis `INCR`+`EXPIRE`), not the sliding-window-per-IP+email
+  originally sketched here — simpler to implement correctly and enough to
+  blunt casual abuse; a determined attacker rotating IPs isn't stopped by
+  either version without more infra, so this wasn't worth the extra
+  complexity for v1. Upgrading to sliding-window and/or adding an
+  email-keyed dimension is a same-file change in `core/dependencies.py`'s
+  `rate_limit()` if abuse patterns show it's needed.
 - Admin auth is a separate path (`/admin/auth/*`, confirmed) rather than the
   same login gated by `role=admin`: email+password only (no Google OAuth for
   the admin path), its own refresh-token record type, and no cross-mixing
@@ -290,8 +320,15 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
    for missing fields if not.
 3. `POST /bookings` — creates a `pending` booking + participant rows inside
    one DB transaction; capacity check uses `SELECT ... FOR UPDATE` on the
-   trip/category row to avoid two concurrent bookings overselling the last
-   seat (Postgres row lock, no Redis lock needed at this scale).
+   trip row to avoid two concurrent bookings overselling the last seat
+   (Postgres row lock, no Redis lock needed at this scale). The count
+   compared against capacity is participants across **active** bookings —
+   `pending` + `awaiting_payment` + `confirmed`, not just `confirmed` — so a
+   seat is reserved the moment someone starts checkout, not only once
+   they've paid; that reservation is released by the expiry job in point 6
+   below if they abandon it. Both `trips.capacity` (whole-trip cap) and the
+   relevant `trip_categories.capacity` (per-category cap, if the admin set
+   one) are checked in the same locked transaction.
 4. `POST /payments/create-intent` — creates a Stripe PaymentIntent for the
    booking's total, returns `client_secret` to the frontend, which completes
    payment with Stripe.js/Elements.
@@ -312,9 +349,13 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
   stored flag isn't strictly required; simplest to just filter
   `end_date < now()` at query time rather than add a job. Mentioned here as
   the alternative if you'd rather precompute.)
-- Release expired `pending` bookings back to available capacity.
+- Release expired `pending` bookings back to available capacity — shipped as
+  a 5-minute ARQ cron job cancelling any `pending` booking older than 30
+  minutes (both numbers are just-picked defaults, easy to tune in
+  `bookings/service.py` / `workers/worker_settings.py` once real checkout
+  timing data exists).
 - Optional: periodic newsletter digest, if you don't just trigger campaigns
-  manually through Resend's dashboard.
+  manually through Resend's dashboard. Not implemented — still optional.
 
 ## 9. Cross-cutting concerns
 
@@ -393,11 +434,19 @@ frontend plan.
 
 ## 12. Next steps
 
-Scaffold `backend/`: FastAPI app skeleton, Docker Compose with `api` +
-`postgres` + `redis`, Alembic init, first migration covering the schema in
-§4 (including the `*_translations` tables). See `docs/FRONTEND_PLAN.md` and
-`docs/DESIGN_SYSTEM.md` for the Next.js side — several §4/§5 schema fields
-above (`trips.is_featured`, `trip_translations.summary`/`duration_label`,
-`contact_messages.inquiry_type`/`trip_id`, `?q=` search) were added after
-reviewing the provided Figma templates, to match what the UI actually needs
-to render.
+Backend is built — see `backend/README.md` for setup and the verification
+notes (this sandbox couldn't `pip install`/run it live due to network
+policy; it was checked via full syntax compilation, a static
+unused-import/undefined-name sweep, and the actual migration SQL applied,
+rolled back, and data-smoke-tested against a real local Postgres instead).
+
+One item flagged in that README worth repeating here: the `audit_log` write
+(§4 Ops) is only wired into a representative slice of admin mutations —
+trip create/update/delete, booking status change, content page/site-settings
+update — as the pattern to extend, not full coverage. Extend
+`audit_service.record(...)` into the remaining admin write endpoints (race
+categories, trip images/inclusions, newsletter) the same way as the admin
+dashboard gets built out.
+
+Next: `docs/FRONTEND_PLAN.md` and `docs/DESIGN_SYSTEM.md` for the Next.js
+side.
