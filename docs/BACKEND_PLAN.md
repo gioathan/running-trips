@@ -431,6 +431,9 @@ frontend plan.
 - Admin auth: **separate path** (`/admin/auth/*`), email+password only.
 - Currency: **EUR only**, no multi-currency support at launch.
 - Trip/page slugs: **shared across locales**, not translated.
+- Deployment: **frontend on Vercel, backend+Postgres+Redis+worker on a
+  single rented VM** via `docker-compose.prod.yml` — not Supabase/managed
+  serverless. See `docs/DEPLOYMENT.md`.
 
 ## 12. Next steps
 

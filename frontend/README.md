@@ -8,8 +8,10 @@ Next.js (App Router) + next-intl + Tailwind, per `docs/FRONTEND_PLAN.md` and
 
 ```bash
 cp frontend/.env.example frontend/.env.local
-# BACKEND_URL should point at the FastAPI service (http://api:8000 in
-# docker-compose, http://localhost:8000 if running the backend bare)
+# BACKEND_URL=http://localhost:8000 — this dev server runs on the host,
+# not inside the docker-compose network, so use the port docker-compose.yml
+# publishes to the host, not the internal service name (`api`) that only
+# resolves *between* containers.
 
 cd frontend
 npm install
@@ -19,6 +21,8 @@ npm run dev
 Runs against the backend from `docs/BACKEND_PLAN.md`. Start that first
 (`docker compose up` at the repo root covers `api` + `postgres` + `redis`);
 this app doesn't have its own database.
+
+For production (Vercel), see `docs/DEPLOYMENT.md`.
 
 ## Auth architecture (why there are two proxy routes)
 

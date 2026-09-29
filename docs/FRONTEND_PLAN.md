@@ -275,6 +275,8 @@ in `TripImagesManager.tsx`. That's the next piece of work there.
 - **Season filter & route-elevation stats widget**: skipped for v1
   (confirmed) — neither was in your original spec; can be added later
   without any backend changes.
+- **Deployment**: Vercel (root directory `frontend/`), backend on a
+  separate rented VM — see `docs/DEPLOYMENT.md`.
 
 ## 12. Next steps
 
