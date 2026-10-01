@@ -3,7 +3,8 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { backendFetch, qs } from "@/lib/api";
 import { requireUser } from "@/lib/auth-server";
 import { AccountTripsTabs } from "@/components/site/AccountTripsTabs";
-import type { Booking, Page } from "@/types/api";
+import { PendingCommentsSection } from "@/components/site/PendingCommentsSection";
+import type { Booking, Page, PendingTripComment } from "@/types/api";
 
 // Identity/booking data — never cached (BACKEND_PLAN.md's Next.js caching split).
 export const dynamic = "force-dynamic";
@@ -18,13 +19,22 @@ export default async function AccountPage({
   setRequestLocale(locale);
   const t = await getTranslations("account");
   const session = await requireUser();
-  if (!session) redirect({ href: "/", locale });
+  if (!session) {
+    redirect({ href: "/", locale });
+    return null;
+  }
 
   const status = searchParams.status === "past" ? "past" : "upcoming";
-  const bookings = await backendFetch<Page<Booking>>(`/users/me/bookings${qs({ status, page_size: 20, locale })}`, {
-    headers: { Authorization: `Bearer ${session.accessToken}` },
-    cache: "no-store",
-  });
+  const [bookings, pendingComments] = await Promise.all([
+    backendFetch<Page<Booking>>(`/users/me/bookings${qs({ status, page_size: 20, locale })}`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+      cache: "no-store",
+    }),
+    backendFetch<PendingTripComment[]>(`/users/me/pending-trip-comments${qs({ locale })}`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+      cache: "no-store",
+    }),
+  ]);
 
   return (
     <div className="py-10 md:py-16">
@@ -34,6 +44,8 @@ export default async function AccountPage({
       <div className="mt-8">
         <AccountTripsTabs status={status} bookings={bookings.items} />
       </div>
+
+      <PendingCommentsSection initial={pendingComments} />
     </div>
   );
 }

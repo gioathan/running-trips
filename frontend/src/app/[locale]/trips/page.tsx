@@ -4,7 +4,9 @@ import { TripCard } from "@/components/site/TripCard";
 import { FilterBar } from "@/components/site/FilterBar";
 import { UrlPagination } from "@/components/site/UrlPagination";
 import { EmptyState } from "@/components/ui/Feedback";
-import type { Page, RaceCategory, TripListItem } from "@/types/api";
+import { CtaBanner } from "@/components/site/sections/CtaBanner";
+import { StatsBand } from "@/components/site/sections/StatsBand";
+import type { Page, RaceCategory, TripListItem, TripStats } from "@/types/api";
 
 export const revalidate = 60;
 
@@ -28,12 +30,13 @@ export default async function TripsPage({
   const status = searchParams.status === "past" ? "past" : "upcoming";
   const page = Number(searchParams.page) || 1;
 
-  const [tripsPage, categories] = await Promise.all([
+  const [tripsPage, categories, stats] = await Promise.all([
     backendFetch<Page<TripListItem>>(
       `/trips${qs({ status, category: searchParams.category, q: searchParams.q, page, page_size: 12, locale })}`,
       { next: { revalidate: 60 } }
     ),
     backendFetch<RaceCategory[]>(`/race-categories${qs({ locale })}`, { next: { revalidate: 300 } }),
+    backendFetch<TripStats>("/trips/stats", { next: { revalidate: 60 } }),
   ]);
 
   return (
@@ -54,13 +57,34 @@ export default async function TripsPage({
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {tripsPage.items.map((trip) => (
-            <TripCard key={trip.id} trip={trip} />
+            <TripCard key={trip.id} trip={trip} locale={locale} />
           ))}
         </div>
       )}
 
       <div className="mt-12">
         <UrlPagination page={tripsPage.page} pageSize={tripsPage.page_size} total={tripsPage.total} />
+      </div>
+
+      <div className="mt-16">
+        <StatsBand
+          data={{
+            items: [
+              { value: `${stats.races_organized}+`, label: t("bannerStat1Label") },
+              { value: String(stats.countries), label: t("bannerStat2Label") },
+            ],
+          }}
+        />
+      </div>
+      <div className="mt-8">
+        <CtaBanner
+          data={{
+            eyebrow: t("bannerEyebrow"),
+            headline: t("bannerHeadline"),
+            body: t("bannerBody"),
+            primaryCta: { label: t("bannerCta"), href: "/contact" },
+          }}
+        />
       </div>
     </div>
   );

@@ -45,7 +45,7 @@ export default async function HomePage({ params: { locale } }: { params: { local
           <h2 className="text-headline-lg-mobile md:text-headline-lg">{t("featuredTripsHeadline")}</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
             {featuredTrips.map((trip) => (
-              <TripCard key={trip.id} trip={trip} />
+              <TripCard key={trip.id} trip={trip} locale={locale} />
             ))}
           </div>
         </section>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Label, Textarea, FieldError } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -25,7 +26,10 @@ export function ContactForm() {
   const { user } = useAuth();
   const { open: openLoginModal } = useLoginModal();
   const { showToast } = useToast();
-  const [inquiryType, setInquiryType] = useState<(typeof INQUIRY_TYPES)[number]>("general");
+  const searchParams = useSearchParams();
+  const tripIdParam = searchParams.get("tripId");
+  const tripId = tripIdParam ? Number(tripIdParam) : undefined;
+  const [inquiryType, setInquiryType] = useState<(typeof INQUIRY_TYPES)[number]>(tripId ? "booking" : "general");
   const {
     register,
     handleSubmit,
@@ -35,7 +39,7 @@ export function ContactForm() {
 
   if (!user) {
     return (
-      <Card className="p-8 text-center">
+      <Card className="rounded-2xl p-8 text-center">
         <p className="text-headline-sm">{t("signInToSend")}</p>
         <Button variant="primary" className="mt-6" onClick={() => openLoginModal({ tab: "login" })}>
           {t("logInCta")}
@@ -46,7 +50,10 @@ export function ContactForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await apiFetch("/contact", { method: "POST", body: JSON.stringify({ inquiry_type: inquiryType, message: values.message }) });
+      await apiFetch("/contact", {
+        method: "POST",
+        body: JSON.stringify({ inquiry_type: inquiryType, trip_id: tripId ?? null, message: values.message }),
+      });
       showToast(t("sendSuccess"));
       reset();
     } catch (err) {
@@ -55,8 +62,12 @@ export function ContactForm() {
   });
 
   return (
-    <Card className="p-8">
-      <form onSubmit={onSubmit} className="space-y-4">
+    <Card className="rounded-2xl p-8">
+      <h2 className="text-headline-sm">{t("formHeadline")}</h2>
+      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        {tripId && (
+          <div className="rounded-full bg-surface-low px-4 py-2 text-label-md uppercase text-ink-muted">{t("regardingTrip", { id: tripId })}</div>
+        )}
         <div>
           <Label htmlFor="inquiry-type">{t("inquiryType")}</Label>
           <Select

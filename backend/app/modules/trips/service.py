@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
@@ -16,8 +16,17 @@ from app.modules.trips.schemas import (
     TripImageIn,
     TripInclusionIn,
     TripListItem,
+    TripStats,
     TripUpdate,
 )
+
+
+async def get_trip_stats(db: AsyncSession) -> TripStats:
+    races_organized = (await db.execute(select(func.count(Trip.id)))).scalar_one()
+    countries = (
+        await db.execute(select(func.count(func.distinct(Trip.location_country))).where(Trip.location_country.isnot(None)))
+    ).scalar_one()
+    return TripStats(races_organized=races_organized, countries=countries)
 
 
 def _duration_label(trip: Trip, override: str | None) -> str:

@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import re
 import secrets
 
 import jwt
@@ -12,6 +13,13 @@ settings = get_settings()
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 JWT_ALGORITHM = "HS256"
+
+# Mirrors the frontend's signup/reset-password regex (frontend/src/lib/password.ts).
+STRONG_PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,128}$")
+
+
+def is_strong_password(password: str) -> bool:
+    return bool(STRONG_PASSWORD_PATTERN.match(password))
 
 
 def hash_password(raw_password: str) -> str:

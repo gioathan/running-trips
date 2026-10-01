@@ -39,8 +39,8 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
               type="button"
               onClick={() => updateParams({ status: value })}
               className={cn(
-                "rounded-full px-6 py-2 text-label-lg uppercase",
-                status === value ? "bg-white shadow-hard" : "text-ink-muted"
+                "rounded-full px-6 py-2 text-label-lg uppercase transition-colors",
+                status === value ? "bg-white shadow-hard" : "text-ink-muted hover:text-ink"
               )}
             >
               {t(value)}
@@ -63,8 +63,8 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
           type="button"
           onClick={() => updateParams({ category: undefined })}
           className={cn(
-            "rounded-full border px-4 py-1 text-label-md uppercase",
-            !category ? "border-ink bg-ink text-white" : "border-ink/30 text-ink-muted"
+            "rounded-full border px-4 py-1 text-label-md uppercase transition-colors",
+            !category ? "border-ink bg-ink text-white" : "border-ink/30 text-ink-muted hover:border-ink hover:text-ink"
           )}
         >
           {t("allDistances")}
@@ -75,8 +75,8 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
             type="button"
             onClick={() => updateParams({ category: c.slug })}
             className={cn(
-              "rounded-full border px-4 py-1 text-label-md uppercase",
-              category === c.slug ? "border-ink bg-ink text-white" : "border-ink/30 text-ink-muted"
+              "rounded-full border px-4 py-1 text-label-md uppercase transition-colors",
+              category === c.slug ? "border-ink bg-ink text-white" : "border-ink/30 text-ink-muted hover:border-ink hover:text-ink"
             )}
           >
             {c.name}

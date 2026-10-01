@@ -12,7 +12,7 @@ export default async function ServicesPage({ params: { locale } }: { params: { l
   }).catch(() => ({ slug: "services", sections: [] }) as PageContent);
 
   return (
-    <div className="py-10 md:py-16">
+    <div>
       <SectionList sections={content.sections} />
     </div>
   );

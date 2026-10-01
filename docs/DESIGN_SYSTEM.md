@@ -3,6 +3,12 @@
 Status: **implemented** in `frontend/` (Tailwind config, components).
 Logo assets are still the one open item — see below.
 
+> **v1.1 amendment (in progress):** adding a `rounded-2xl` (20px) card radius
+> and a blurred `shadow-soft` lift as opt-in alternatives to the flat
+> `hard` shadow, used on floating badges/overlays (Hero, trip cards) to read
+> as more "modern SaaS/product" without abandoning the brand's flat,
+> hairline-border base. `hard` stays the default for buttons/chips.
+
 Brand: **ΑΛΛΟΥ**. Two logo assets pending (full logo + a small mark, the
 mark used in most placements — see FRONTEND_PLAN.md §5 for exactly where
 each is used); this doc's tokens/components don't depend on the logo files

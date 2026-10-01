@@ -306,9 +306,17 @@ DROP TABLE IF EXISTS users;
 """
 
 
+def _execute_statements(sql: str) -> None:
+    # asyncpg rejects multiple statements in one prepared statement.
+    for statement in sql.split(";"):
+        lines = [ln for ln in statement.splitlines() if ln.strip() and not ln.strip().startswith("--")]
+        if lines:
+            op.execute("\n".join(lines))
+
+
 def upgrade() -> None:
-    op.execute(UPGRADE_SQL)
+    _execute_statements(UPGRADE_SQL)
 
 
 def downgrade() -> None:
-    op.execute(DOWNGRADE_SQL)
+    _execute_statements(DOWNGRADE_SQL)

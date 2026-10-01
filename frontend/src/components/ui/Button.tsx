@@ -37,7 +37,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-interface ButtonLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+interface ButtonLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "popover"> {
   href: string;
   variant?: Variant;
   size?: "md" | "sm";

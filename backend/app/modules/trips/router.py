@@ -11,11 +11,17 @@ from app.modules.trips.schemas import (
     TripImageIn,
     TripInclusionIn,
     TripListItem,
+    TripStats,
     TripUpdate,
 )
 from app.modules.users.models import User
 
 router = APIRouter(tags=["trips"])
+
+
+@router.get("/trips/stats", response_model=TripStats)
+async def get_trip_stats(db: DbSession):
+    return await service.get_trip_stats(db)
 
 
 @router.get("/trips", response_model=Page[TripListItem])

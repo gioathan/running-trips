@@ -12,7 +12,10 @@ export default async function ProfilePage({ params: { locale } }: { params: { lo
   setRequestLocale(locale);
   const t = await getTranslations("profile");
   const session = await requireUser();
-  if (!session) redirect({ href: "/", locale });
+  if (!session) {
+    redirect({ href: "/", locale });
+    return null;
+  }
 
   const travelProfile = await backendFetch<TravelProfile>("/users/me/travel-profile", {
     headers: { Authorization: `Bearer ${session.accessToken}` },

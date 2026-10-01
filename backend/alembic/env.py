@@ -18,6 +18,7 @@ from app.modules.content import models as content_models  # noqa: F401
 from app.modules.newsletter import models as newsletter_models  # noqa: F401
 from app.modules.payments import models as payments_models  # noqa: F401
 from app.modules.race_categories import models as race_categories_models  # noqa: F401
+from app.modules.trip_comments import models as trip_comments_models  # noqa: F401
 from app.modules.trips import models as trips_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 

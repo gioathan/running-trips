@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/Feedback";
 import { cn } from "@/lib/cn";
+import { formatDateRange } from "@/lib/format-date";
 import type { Booking } from "@/types/api";
 
 const STATUS_CHIP_VARIANT: Record<Booking["status"], "status" | "highlight" | "editorial" | "outline"> = {
@@ -19,6 +20,7 @@ const STATUS_CHIP_VARIANT: Record<Booking["status"], "status" | "highlight" | "e
 
 export function AccountTripsTabs({ status, bookings }: { status: "upcoming" | "past"; bookings: Booking[] }) {
   const t = useTranslations("account");
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -58,7 +60,8 @@ export function AccountTripsTabs({ status, bookings }: { status: "upcoming" | "p
                   {booking.trip.title}
                 </Link>
                 <p className="text-body-sm text-ink-muted">
-                  {booking.trip.start_date} · {booking.participant_count} {t("participants")}
+                  {formatDateRange(booking.trip.start_date, booking.trip.end_date, locale)} · {booking.participant_count}{" "}
+                  {t("participants")}
                 </p>
               </div>
               <Chip variant={STATUS_CHIP_VARIANT[booking.status]}>{t(`status.${booking.status}`)}</Chip>

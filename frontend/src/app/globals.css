@@ -22,4 +22,14 @@
     box-shadow: 2px 2px 0 0 #14161a;
     transform: translate(-1px, -1px);
   }
+
+  /* Blurred lift for rounder "product card" style elements (trip cards) —
+     see docs/DESIGN_SYSTEM.md v1.1 amendment. */
+  .shadow-soft-hover {
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .shadow-soft-hover:hover {
+    @apply shadow-soft;
+    transform: translateY(-4px);
+  }
 }

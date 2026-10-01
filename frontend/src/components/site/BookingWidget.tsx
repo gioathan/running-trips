@@ -44,7 +44,8 @@ export function BookingWidget({
   if (categories.length === 0) return null;
 
   return (
-    <Card className="sticky top-6 p-6">
+    // top-20 clears the sticky header's shrunk height so none of the card hides behind it
+    <Card className="sticky top-20 p-6">
       <p className="text-label-md uppercase text-ink-muted">{t("selectCategory")}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {categories.map((c) => (

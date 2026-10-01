@@ -36,6 +36,11 @@ class TripDetail(TripListItem):
     images: list[str]
 
 
+class TripStats(BaseModel):
+    races_organized: int
+    countries: int
+
+
 class TranslationIn(BaseModel):
     locale: str
     title: str

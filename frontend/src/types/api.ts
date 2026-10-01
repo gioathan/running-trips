@@ -94,6 +94,11 @@ export interface TripDetail extends TripListItem {
   images: string[];
 }
 
+export interface TripStats {
+  races_organized: number;
+  countries: number;
+}
+
 export interface TripTranslationIn {
   locale: Locale;
   title: string;
@@ -156,6 +161,24 @@ export interface Booking {
 export interface BookingAdmin extends Booking {
   user_id: number;
   user_email: string;
+}
+
+// --- Trip comments ---
+
+export interface PendingTripComment {
+  trip_id: number;
+  slug: string;
+  title: string;
+  cover_image_url: string | null;
+  start_date: string;
+  end_date: string;
+}
+
+export interface TripComment {
+  id: number;
+  trip_id: number;
+  body: string;
+  created_at: string;
 }
 
 // --- Payments ---

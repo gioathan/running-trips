@@ -23,6 +23,17 @@ This starts `postgres`, `redis`, the `api` (runs `alembic upgrade head` then
 `uvicorn --reload`), and the `worker` (ARQ, background jobs + the
 expired-booking-release cron). API docs at `http://localhost:8000/docs`.
 
+Seed dev data (trips, CMS pages, bookings, an admin and a demo user):
+
+```bash
+docker compose exec api python -m app.seed          # empty DB only
+docker compose exec api python -m app.seed --reset  # wipe and reseed
+```
+
+Logins: `admin@example.com` / `admin12345` (at `/admin/login`) and
+`runner@example.com` / `runner12345`. The seeder refuses to run unless
+`ENVIRONMENT=local`.
+
 For production (a rented VM, not this dev compose file), see
 `docs/DEPLOYMENT.md`.
 

@@ -45,6 +45,7 @@ const config: Config = {
         md: "10px",
         lg: "8px",
         xl: "12px",
+        "2xl": "20px",
         full: "9999px",
       },
       spacing: {
@@ -56,6 +57,18 @@ const config: Config = {
       },
       boxShadow: {
         hard: "2px 2px 0 0 #14161A",
+        // Blurred lift for rounder, "floating" cards (Hero badges, trip cards) —
+        // kept separate from the brand's signature flat `hard` shadow.
+        soft: "0 20px 40px -16px rgba(20, 22, 26, 0.28)",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+      },
+      animation: {
+        marquee: "marquee 24s linear infinite",
       },
     },
   },

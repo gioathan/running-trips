@@ -6,10 +6,12 @@ import { Inter } from "next/font/google";
 import { notFound } from "next/navigation";
 import { routing, type Locale } from "@/i18n/routing";
 import { getCurrentUser } from "@/lib/auth-server";
+import { backendFetch, qs } from "@/lib/api";
 import { AppProviders } from "@/components/layout/AppProviders";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import type { Page, TripListItem } from "@/types/api";
 import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "greek"], variable: "--font-inter" });
@@ -32,15 +34,27 @@ export default async function LocaleLayout({
   if (!routing.locales.includes(locale as Locale)) notFound();
   setRequestLocale(locale);
 
-  const [messages, user] = await Promise.all([getMessages(), getCurrentUser()]);
+  const [messages, user, tripsPage] = await Promise.all([
+    getMessages(),
+    getCurrentUser(),
+    backendFetch<Page<TripListItem>>(`/trips${qs({ status: "upcoming", page_size: 12, locale })}`, {
+      next: { revalidate: 300 },
+    }).catch(() => null),
+  ]);
+
+  // Ticker items: real race name + city from upcoming trips, falling back to
+  // Marquee's own static defaults if the trips list is empty/unavailable.
+  const marqueeItems = tripsPage?.items.length
+    ? tripsPage.items.map((trip) => (trip.location_city ? `${trip.title} · ${trip.location_city}` : trip.title))
+    : undefined;
 
   return (
     <html lang={locale} className={inter.variable}>
       <body className="min-h-screen font-sans">
         <NextIntlClientProvider messages={messages}>
           <AppProviders initialUser={user}>
-            <Header />
-            <main className="mx-auto max-w-[1280px] px-4 pb-24 md:px-8 md:pb-0">{children}</main>
+            <Header marqueeItems={marqueeItems} />
+            <main className="mx-auto max-w-[1280px] px-4 pb-24 md:px-8 md:pb-16">{children}</main>
             <Footer />
             <MobileBottomNav />
           </AppProviders>

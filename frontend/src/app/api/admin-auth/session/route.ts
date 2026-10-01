@@ -3,16 +3,13 @@ import { cookies } from "next/headers";
 import { backendFetch, ApiError } from "@/lib/api";
 import { setAdminAuthCookies, clearAdminAuthCookies } from "@/lib/auth-server";
 import { ADMIN_ACCESS_TOKEN_COOKIE, ADMIN_REFRESH_TOKEN_COOKIE } from "@/lib/cookies";
+import type { TokenPair } from "@/types/api";
 
 interface AdminUser {
   id: number;
   email: string;
   full_name: string | null;
   role: string;
-}
-interface TokenPair {
-  access_token: string;
-  refresh_token: string;
 }
 
 export async function GET() {

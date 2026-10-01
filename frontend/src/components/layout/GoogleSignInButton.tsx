@@ -20,6 +20,7 @@ declare global {
 }
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID;
+export const GOOGLE_SSO_ENABLED = Boolean(CLIENT_ID);
 
 /** Renders Google's own Sign-In button once its script loads. No-ops
  * (renders nothing) if NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID isn't set, e.g.

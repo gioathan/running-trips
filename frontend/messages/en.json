@@ -10,11 +10,18 @@
     "logIn": "Log in",
     "browseTrips": "Browse Trips",
     "ourServices": "Our Services",
-    "account": "Account"
+    "account": "Account",
+    "logOutConfirmTitle": "Log out?",
+    "logOutConfirmBody": "You'll need to log in again to access your account.",
+    "cancel": "Cancel"
   },
   "auth": {
     "emailLabel": "Email",
     "passwordLabel": "Password",
+    "confirmPasswordLabel": "Confirm password",
+    "passwordRequirements": "At least 10 characters, with an uppercase letter, a lowercase letter, a number, and a symbol.",
+    "passwordWeak": "Password must be at least 10 characters and include an uppercase letter, a lowercase letter, a number, and a symbol.",
+    "passwordMismatch": "Passwords don't match.",
     "forgotPassword": "Forgot password?",
     "rememberMe": "Remember me",
     "logIn": "Log in",
@@ -62,7 +69,13 @@
     "searchPlaceholder": "Search by region, country, or race name…",
     "allDistances": "All distances",
     "upcoming": "Upcoming",
-    "past": "Past"
+    "past": "Past",
+    "bannerEyebrow": "Can't find your race?",
+    "bannerHeadline": "We build custom trips for any race, anywhere.",
+    "bannerBody": "Tell us your goal race and group size — we'll put together a bespoke itinerary within 48 hours.",
+    "bannerCta": "Request a custom trip",
+    "bannerStat1Label": "Races organized",
+    "bannerStat2Label": "Countries"
   },
   "account": {
     "pageTitle": "My Trips",
@@ -72,6 +85,12 @@
     "emptyTitle": "No trips here yet",
     "emptyDescription": "Once you book a trip, it'll show up here.",
     "participants": "participants",
+    "commentsHeadline": "Share your experience",
+    "commentsSubtitle": "A quick word about your last trips helps other runners decide.",
+    "commentPlaceholder": "How was it?",
+    "commentSubmit": "Post comment",
+    "commentSuccess": "Thanks for sharing!",
+    "commentsShowMore": "Show {count} more",
     "status": {
       "pending": "Pending",
       "awaiting_payment": "Awaiting payment",
@@ -120,10 +139,13 @@
     "success": "You're booked! Redirecting to your trips…"
   },
   "contact": {
+    "eyebrow": "Talk to us",
     "pageTitle": "Get in touch",
     "pageSubtitle": "Connect directly with our race operations team. We respond within 24 hours.",
+    "formHeadline": "Send us a message",
     "signInToSend": "Log in to send us a message.",
     "logInCta": "Log in",
+    "regardingTrip": "Regarding trip #{id}",
     "sendSuccess": "Message sent — we'll be in touch soon.",
     "inquiryType": "What's this about?",
     "inquiryTypes": {
@@ -142,6 +164,10 @@
     "backToHome": "Back to home",
     "invalidLink": "This reset link is invalid or has expired.",
     "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordRequirements": "At least 10 characters, with an uppercase letter, a lowercase letter, a number, and a symbol.",
+    "passwordWeak": "Password must be at least 10 characters and include an uppercase letter, a lowercase letter, a number, and a symbol.",
+    "passwordMismatch": "Passwords don't match.",
     "submit": "Reset password"
   },
   "newsletterUnsubscribe": {

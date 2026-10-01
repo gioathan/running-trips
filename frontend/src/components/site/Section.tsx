@@ -7,6 +7,7 @@ import { ComparisonTable } from "./sections/ComparisonTable";
 import { Steps } from "./sections/Steps";
 import { CtaBanner } from "./sections/CtaBanner";
 import { FaqAccordion } from "@/components/ui/FaqAccordion";
+import { Reveal } from "@/components/ui/Reveal";
 import type {
   CtaBannerData,
   FaqData,
@@ -36,12 +37,33 @@ export function Section({ section }: { section: ContentSection }) {
       return <Testimonials data={section.data as unknown as TestimonialsData} />;
     case "faq": {
       const data = section.data as unknown as FaqData;
+      if (data.layout === "grid") {
+        return (
+          <Reveal>
+            <section className="py-10 md:py-16">
+              {data.eyebrow && <p className="text-label-lg text-ink-muted">{data.eyebrow}</p>}
+              {data.headline && <h2 className="mt-2 mb-6 text-headline-lg-mobile md:text-headline-lg">{data.headline}</h2>}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {data.items.map((item, i) => (
+                  <div key={i} className="rounded-md border border-ink bg-surface p-6">
+                    <p className="text-metric-display text-primary">{String(i + 1).padStart(2, "0")}</p>
+                    <h3 className="mt-2 text-headline-sm">{item.question}</h3>
+                    <p className="mt-2 text-body-md text-ink-muted">{item.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </Reveal>
+        );
+      }
       return (
-        <section className="py-10 md:py-16">
-          {data.eyebrow && <p className="text-label-lg text-ink-muted">{data.eyebrow}</p>}
-          {data.headline && <h2 className="mt-2 mb-6 text-headline-lg-mobile md:text-headline-lg">{data.headline}</h2>}
-          <FaqAccordion items={data.items} />
-        </section>
+        <Reveal>
+          <section className="py-10 md:py-16">
+            {data.eyebrow && <p className="text-label-lg text-ink-muted">{data.eyebrow}</p>}
+            {data.headline && <h2 className="mt-2 mb-6 text-headline-lg-mobile md:text-headline-lg">{data.headline}</h2>}
+            <FaqAccordion items={data.items} />
+          </section>
+        </Reveal>
       );
     }
     case "comparison_table":

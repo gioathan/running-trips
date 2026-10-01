@@ -11,6 +11,7 @@ from app.modules.content.router import router as content_router
 from app.modules.newsletter.router import router as newsletter_router
 from app.modules.payments.router import router as payments_router
 from app.modules.race_categories.router import router as race_categories_router
+from app.modules.trip_comments.router import router as trip_comments_router
 from app.modules.trips.router import router as trips_router
 from app.modules.uploads.router import router as uploads_router
 from app.modules.users.router import router as users_router
@@ -35,6 +36,7 @@ for router in (
     users_router,
     race_categories_router,
     trips_router,
+    trip_comments_router,
     bookings_router,
     payments_router,
     content_router,
