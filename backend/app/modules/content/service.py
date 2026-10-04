@@ -97,6 +97,12 @@ async def list_site_settings(db: AsyncSession) -> dict[str, dict]:
     return {row.key: row.value for row in result.scalars().all()}
 
 
+async def get_public_site_settings(db: AsyncSession) -> dict[str, dict]:
+    result = await db.execute(select(SiteSetting).where(SiteSetting.key == "footer"))
+    setting = result.scalar_one_or_none()
+    return {"footer": setting.value} if setting else {}
+
+
 async def update_site_settings(db: AsyncSession, settings: dict[str, dict]) -> dict[str, dict]:
     for key, value in settings.items():
         setting = await db.get(SiteSetting, key)

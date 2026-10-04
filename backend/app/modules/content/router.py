@@ -26,6 +26,11 @@ async def update_page(slug: str, body: PageUpdate, db: DbSession, current_admin:
     return page
 
 
+@router.get("/site-settings/public")
+async def get_public_site_settings(db: DbSession):
+    return await service.get_public_site_settings(db)
+
+
 @router.get("/admin/site-settings", dependencies=[Depends(get_current_admin)])
 async def get_site_settings(db: DbSession):
     return await service.list_site_settings(db)

@@ -1,10 +1,21 @@
-import { ComingSoon } from "@/components/admin/ComingSoon";
+import { cookies } from "next/headers";
+import { backendFetch } from "@/lib/api";
+import { ADMIN_ACCESS_TOKEN_COOKIE } from "@/lib/cookies";
+import { ContentPageEditor } from "@/components/admin/ContentPageEditor";
+import type { ContentPageAdmin } from "@/types/api";
 
-export default function AdminContentPage() {
-  return (
-    <ComingSoon
-      title="Content Pages"
-      note="Backend CRUD exists (GET/PATCH /admin/content/pages/{slug}) with a full-replace section list — build a per-page-slug editor with an add/remove/reorder section list, each section type having its own small form matching src/components/site/sections/types.ts."
-    />
+export const dynamic = "force-dynamic";
+
+const PAGE_SLUGS = ["home", "services", "contact"] as const;
+
+export default async function AdminContentPage() {
+  const accessToken = cookies().get(ADMIN_ACCESS_TOKEN_COOKIE)?.value ?? "";
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const pages = await Promise.all(
+    PAGE_SLUGS.map((slug) =>
+      backendFetch<ContentPageAdmin>(`/admin/content/pages/${slug}`, { headers, cache: "no-store" })
+    )
   );
+
+  return <ContentPageEditor pages={pages} />;
 }

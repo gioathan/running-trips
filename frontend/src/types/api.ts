@@ -209,13 +209,37 @@ export interface ContentSection {
   data: Record<string, unknown>;
 }
 
+export interface ContentSectionAdmin {
+  id: number;
+  type: SectionType;
+  sort_order: number;
+  translations: Partial<Record<Locale, Record<string, unknown>>>;
+}
+
+export interface ContentPageAdmin {
+  slug: string;
+  sections: ContentSectionAdmin[];
+}
+
 export interface PageContent {
   slug: string;
   sections: ContentSection[];
 }
 
+export interface SiteFooterCopy {
+  tagline: string;
+  newsletterHint: string;
+  newsletterBody: string;
+}
+
+export interface SiteFooterSettings {
+  localized: Partial<Record<Locale, Partial<SiteFooterCopy>>>;
+  social_links: { label: string; url: string }[];
+}
+
 export interface SiteSettings {
-  [key: string]: Record<string, unknown>;
+  footer?: SiteFooterSettings;
+  [key: string]: unknown;
 }
 
 // --- Newsletter / contact ---

@@ -9,6 +9,7 @@ export interface SelectOption {
 }
 
 interface SelectProps {
+  id?: string;
   value: string;
   onValueChange: (value: string) => void;
   options: SelectOption[];
@@ -16,10 +17,11 @@ interface SelectProps {
   className?: string;
 }
 
-export function Select({ value, onValueChange, options, placeholder, className }: SelectProps) {
+export function Select({ id, value, onValueChange, options, placeholder, className }: SelectProps) {
   return (
     <RadixSelect.Root value={value} onValueChange={onValueChange}>
       <RadixSelect.Trigger
+        id={id}
         className={cn(
           "flex w-full items-center justify-between rounded-md border border-ink bg-white px-[17px] py-[10px] text-body-lg text-ink focus:outline-none focus:ring-2 focus:ring-ink",
           className

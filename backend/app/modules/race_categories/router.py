@@ -17,6 +17,15 @@ async def list_race_categories(db: DbSession, locale: Locale):
     return await service.list_categories(db, locale)
 
 
+@router.get(
+    "/admin/race-categories",
+    response_model=list[RaceCategoryAdminRead],
+    dependencies=[Depends(get_current_admin)],
+)
+async def list_admin_race_categories(db: DbSession):
+    return await service.list_admin_categories(db)
+
+
 @router.post("/admin/race-categories", response_model=RaceCategoryAdminRead, dependencies=[Depends(get_current_admin)])
 async def create_race_category(body: RaceCategoryCreate, db: DbSession):
     return await service.create_category(db, body)

@@ -22,6 +22,11 @@ async def list_categories(db: AsyncSession, locale: str) -> list[RaceCategoryRea
     return out
 
 
+async def list_admin_categories(db: AsyncSession) -> list[RaceCategoryAdminRead]:
+    result = await db.execute(select(RaceCategory).order_by(RaceCategory.slug))
+    return [_to_admin_read(category) for category in result.scalars().unique().all()]
+
+
 async def get_category_or_404(db: AsyncSession, category_id: int) -> RaceCategory:
     category = await db.get(RaceCategory, category_id)
     if category is None:
@@ -53,6 +58,11 @@ async def create_category(db: AsyncSession, body: RaceCategoryCreate) -> RaceCat
 async def update_category(db: AsyncSession, category_id: int, body: RaceCategoryUpdate) -> RaceCategoryAdminRead:
     category = await get_category_or_404(db, category_id)
     if body.slug is not None:
+        existing = await db.execute(
+            select(RaceCategory.id).where(RaceCategory.slug == body.slug, RaceCategory.id != category_id)
+        )
+        if existing.scalar_one_or_none():
+            raise ConflictError("A race category with this slug already exists.")
         category.slug = body.slug
     if body.translations is not None:
         by_locale = {t.locale: t for t in category.translations}

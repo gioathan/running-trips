@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/lib/toast-context";
 import { apiFetch } from "@/lib/api";
+import type { Locale, SiteFooterSettings } from "@/types/api";
 
 const LINK_COLUMNS = [
   { headingKey: "trips", hrefs: [{ href: "/trips", key: "browseTrips" }] },
@@ -51,9 +52,11 @@ function NewsletterForm() {
   );
 }
 
-export function Footer() {
+export function Footer({ settings }: { settings?: SiteFooterSettings }) {
   const t = useTranslations("footer");
   const tNav = useTranslations("nav");
+  const locale = useLocale() as Locale;
+  const copy = settings?.localized?.[locale];
 
   return (
     <footer className="bg-footer-bg text-footer-fg">
@@ -61,12 +64,12 @@ export function Footer() {
         <div className="grid gap-12 md:grid-cols-2">
           <div>
             <span className="text-headline-sm">ΑΛΛΟΥ</span>
-            <p className="mt-4 max-w-[380px] text-body-md text-white/70">{t("tagline")}</p>
-            <p className="mt-6 text-body-sm text-white/50">{t("newsletterHint")}</p>
+            <p className="mt-4 max-w-[380px] text-body-md text-white/70">{copy?.tagline || t("tagline")}</p>
+            <p className="mt-6 text-body-sm text-white/50">{copy?.newsletterHint || t("newsletterHint")}</p>
           </div>
           <div>
             <p className="text-label-md uppercase text-white/70">{t("newsletter")}</p>
-            <p className="mt-2 text-body-md text-white/70">{t("newsletterBody")}</p>
+            <p className="mt-2 text-body-md text-white/70">{copy?.newsletterBody || t("newsletterBody")}</p>
             <div className="mt-4">
               <NewsletterForm />
             </div>
@@ -94,6 +97,11 @@ export function Footer() {
           <p>© {new Date().getFullYear()} ΑΛΛΟΥ. {t("rightsReserved")}</p>
           <div className="flex gap-6">
             <Link href="/contact">{tNav("contact")}</Link>
+            {settings?.social_links?.map((link) => (
+              <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="hover:text-white">
+                {link.label}
+              </a>
+            ))}
           </div>
         </div>
       </div>

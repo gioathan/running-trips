@@ -11,7 +11,7 @@ import { AppProviders } from "@/components/layout/AppProviders";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
-import type { Page, TripListItem } from "@/types/api";
+import type { Page, SiteSettings, TripListItem } from "@/types/api";
 import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "greek"], variable: "--font-inter" });
@@ -34,12 +34,13 @@ export default async function LocaleLayout({
   if (!routing.locales.includes(locale as Locale)) notFound();
   setRequestLocale(locale);
 
-  const [messages, user, tripsPage] = await Promise.all([
+  const [messages, user, tripsPage, siteSettings] = await Promise.all([
     getMessages(),
     getCurrentUser(),
     backendFetch<Page<TripListItem>>(`/trips${qs({ status: "upcoming", page_size: 12, locale })}`, {
       next: { revalidate: 300 },
     }).catch(() => null),
+    backendFetch<SiteSettings>("/site-settings/public", { cache: "no-store" }).catch((): SiteSettings => ({})),
   ]);
 
   // Ticker items: real race name + city from upcoming trips, falling back to
@@ -55,7 +56,7 @@ export default async function LocaleLayout({
           <AppProviders initialUser={user}>
             <Header marqueeItems={marqueeItems} />
             <main className="mx-auto max-w-[1280px] px-4 pb-24 md:px-8 md:pb-16">{children}</main>
-            <Footer />
+            <Footer settings={siteSettings.footer} />
             <MobileBottomNav />
           </AppProviders>
         </NextIntlClientProvider>
