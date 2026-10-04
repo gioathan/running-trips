@@ -11,8 +11,7 @@ async def record(db: AsyncSession, admin_user_id: int, action: str, entity_type:
     the record of what was attempted — call this *after* the caller's own
     commit succeeds.
 
-    Wired into a representative set of admin write paths (trips, bookings,
-    content) as the pattern to extend to the rest as they're built out."""
+    Called from every admin write endpoint — add it to new ones too."""
     db.add(
         AuditLog(
             admin_user_id=admin_user_id,

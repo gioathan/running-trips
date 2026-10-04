@@ -4,12 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.i18n import resolve_translation
 from app.core.pagination import Page, PageParams, paginate
+from app.modules.bookings.models import Booking
 from app.modules.race_categories.schemas import RaceCategoryRead
 from app.modules.trips import repository
 from app.modules.trips.models import Trip, TripCategory, TripImage, TripInclusion, TripInclusionTranslation, TripStatus, TripTranslation
 from app.modules.trips.schemas import (
     TranslationIn,
     TripAdminRead,
+    TripCategoryIn,
     TripCategoryRead,
     TripCreate,
     TripDetail,
@@ -36,19 +38,21 @@ def _duration_label(trip: Trip, override: str | None) -> str:
     return f"{days} DAY" if days == 1 else f"{days} DAYS"
 
 
-async def _confirmed_participant_count(db: AsyncSession, trip_id: int) -> int:
-    # Deferred to the bookings module (built alongside this one) to avoid a
-    # circular import at module load time — see BookingService.count_confirmed_participants.
-    from app.modules.bookings.service import count_confirmed_participants
+async def _active_participant_count(db: AsyncSession, trip_id: int) -> int:
+    # Same count create_booking checks capacity against (pending +
+    # awaiting_payment + confirmed), so "Full" on the card matches what
+    # booking would actually allow. Deferred import avoids a circular import
+    # with bookings.service at module load time.
+    from app.modules.bookings.service import count_active_participants
 
-    return await count_confirmed_participants(db, trip_id)
+    return await count_active_participants(db, trip_id)
 
 
 async def _to_list_item(db: AsyncSession, trip: Trip, locale: str) -> TripListItem:
     translation = resolve_translation(trip.translations, locale)
     is_full = trip.is_full_override
     if not is_full and trip.capacity is not None:
-        booked = await _confirmed_participant_count(db, trip.id)
+        booked = await _active_participant_count(db, trip.id)
         is_full = booked >= trip.capacity
 
     categories = [
@@ -97,6 +101,7 @@ async def _to_detail(db: AsyncSession, trip: Trip, locale: str) -> TripDetail:
     return TripDetail(
         **list_item.model_dump(),
         description=translation.description if translation else None,
+        meta_description=translation.meta_description if translation else None,
         images=[img.url for img in trip.images],
     )
 
@@ -216,7 +221,7 @@ async def create_trip(db: AsyncSession, body: TripCreate) -> TripAdminRead:
         status=TripStatus(body.status),
     )
     trip.translations = [TripTranslation(**t.model_dump()) for t in body.translations]
-    trip.categories = [TripCategory(**c.model_dump()) for c in body.categories]
+    trip.categories = [TripCategory(**c.model_dump(exclude={"id"})) for c in body.categories]
     db.add(trip)
     await db.commit()
     await db.refresh(trip)
@@ -243,16 +248,49 @@ async def update_trip(db: AsyncSession, trip_id: int, body: TripUpdate) -> TripA
                 trip.translations.append(TripTranslation(**incoming.model_dump()))
 
     if body.categories is not None:
-        trip.categories.clear()
-        trip.categories.extend(TripCategory(**c.model_dump()) for c in body.categories)
+        await _sync_categories(db, trip, body.categories)
 
     await db.commit()
     await db.refresh(trip)
     return _to_admin_read(trip)
 
 
+async def _sync_categories(db: AsyncSession, trip: Trip, incoming: list[TripCategoryIn]) -> None:
+    """Upsert by id instead of clear-and-recreate: bookings reference
+    trip_categories.id (ON DELETE RESTRICT), so rows must keep their ids
+    across edits, and a row with bookings can't be removed."""
+    by_id = {tc.id: tc for tc in trip.categories}
+    keep_ids = {c.id for c in incoming if c.id is not None}
+
+    for tc in list(trip.categories):
+        if tc.id in keep_ids:
+            continue
+        if await _has_bookings(db, Booking.trip_category_id == tc.id):
+            raise ConflictError(
+                "This race category has bookings and can't be removed from the trip.",
+                details={"trip_category_id": tc.id},
+            )
+        trip.categories.remove(tc)
+
+    for c in incoming:
+        existing = by_id.get(c.id) if c.id is not None else None
+        if existing is None:
+            trip.categories.append(TripCategory(**c.model_dump(exclude={"id"})))
+        else:
+            existing.race_category_id = c.race_category_id
+            existing.price = c.price
+            existing.capacity = c.capacity
+
+
+async def _has_bookings(db: AsyncSession, condition) -> bool:
+    result = await db.execute(select(Booking.id).where(condition).limit(1))
+    return result.scalar_one_or_none() is not None
+
+
 async def delete_trip(db: AsyncSession, trip_id: int) -> None:
     trip = await _get_trip_or_404(db, trip_id)
+    if await _has_bookings(db, Booking.trip_id == trip.id):
+        raise ConflictError("This trip has bookings and can't be deleted — archive it instead.")
     await db.delete(trip)
     await db.commit()
 

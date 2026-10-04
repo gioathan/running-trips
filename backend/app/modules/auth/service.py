@@ -2,7 +2,7 @@ import datetime
 
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -13,6 +13,7 @@ from app.core.security import (
     decode_purpose_token,
     generate_opaque_token,
     hash_opaque_token,
+    refresh_token_usable,
     hash_password,
     verify_password,
 )
@@ -77,6 +78,10 @@ async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, local
         return await db.get(User, oauth_account.user_id)
 
     user = await get_user_by_email(db, email) if email else None
+    if user is not None and not claims.get("email_verified"):
+        # Linking to an existing account by an email Google hasn't verified
+        # would let someone who merely *claims* that address take it over.
+        raise EmailAlreadyRegisteredError("An account with this email already exists.")
     if user is None:
         user = User(
             email=email.lower() if email else f"google-{google_sub}@no-email.invalid",
@@ -131,21 +136,23 @@ async def issue_tokens(
 
 async def rotate_refresh_token(
     db: AsyncSession, raw_refresh_token: str, user_agent: str | None, ip: str | None
-) -> tuple[str, str, User]:
+) -> tuple[str, str, bool]:
     token_hash = hash_opaque_token(raw_refresh_token)
     result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
     stored = result.scalar_one_or_none()
     now = datetime.datetime.now(datetime.UTC)
-    if stored is None or stored.revoked_at is not None or stored.expires_at < now:
+    if stored is None or not refresh_token_usable(stored.revoked_at, stored.rotated_at, stored.expires_at, now):
         raise UnauthorizedError("Refresh token is invalid or expired.")
 
-    stored.revoked_at = now
+    if stored.revoked_at is None:
+        stored.revoked_at = now
+        stored.rotated_at = now
     user = await db.get(User, stored.user_id)
     if user is None or not user.is_active:
         raise UnauthorizedError("Account not found or inactive.")
 
     access_token, raw_refresh = await issue_tokens(db, user, stored.remember_me, user_agent, ip)
-    return access_token, raw_refresh, user
+    return access_token, raw_refresh, stored.remember_me
 
 
 async def revoke_refresh_token(db: AsyncSession, raw_refresh_token: str) -> None:
@@ -174,8 +181,16 @@ async def verify_email(db: AsyncSession, token: str) -> User:
     return user
 
 
+def _password_fingerprint(user: User) -> str:
+    # Changes whenever the password does, so a reset link stops working
+    # once it (or any other password change) has been used.
+    return hash_opaque_token(user.password_hash or "")[:16]
+
+
 def build_password_reset_token(user: User) -> str:
-    return create_purpose_token(user.id, PURPOSE_RESET_PASSWORD, datetime.timedelta(hours=1))
+    return create_purpose_token(
+        user.id, PURPOSE_RESET_PASSWORD, datetime.timedelta(hours=1), extra={"pwf": _password_fingerprint(user)}
+    )
 
 
 async def reset_password(db: AsyncSession, token: str, new_password: str) -> User:
@@ -184,8 +199,15 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Use
     except Exception as exc:
         raise UnauthorizedError("Invalid or expired reset link.") from exc
     user = await db.get(User, int(payload["sub"]))
-    if user is None:
+    if user is None or payload.get("pwf") != _password_fingerprint(user):
         raise UnauthorizedError("Invalid or expired reset link.")
     user.password_hash = hash_password(new_password)
+    # Whoever triggered a reset may be locking out an attacker — end every
+    # existing session along with the old password.
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.datetime.now(datetime.UTC))
+    )
     await db.commit()
     return user

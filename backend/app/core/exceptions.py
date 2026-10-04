@@ -47,12 +47,24 @@ class RateLimitedError(AppError):
     code = "RATE_LIMITED"
 
 
+class ServiceNotConfiguredError(AppError):
+    """A third-party integration (Stripe, R2, …) has no credentials in this
+    environment — a clear 503 rather than the SDK's own auth error as a 500."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "SERVICE_NOT_CONFIGURED"
+
+
 class InvalidCredentialsError(UnauthorizedError):
     code = "INVALID_CREDENTIALS"
 
 
 class TripFullError(ConflictError):
     code = "TRIP_FULL"
+
+
+class TripNotBookableError(ConflictError):
+    code = "TRIP_NOT_BOOKABLE"
 
 
 class EmailAlreadyRegisteredError(ConflictError):

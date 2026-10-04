@@ -33,6 +33,7 @@ class TripListItem(BaseModel):
 
 class TripDetail(TripListItem):
     description: str | None
+    meta_description: str | None
     images: list[str]
 
 
@@ -51,6 +52,9 @@ class TranslationIn(BaseModel):
 
 
 class TripCategoryIn(BaseModel):
+    # Set when editing an existing row — it's updated in place rather than
+    # replaced, since bookings reference trip_categories.id.
+    id: int | None = None
     race_category_id: int
     price: float
     capacity: int | None = None

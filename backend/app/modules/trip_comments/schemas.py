@@ -26,3 +26,22 @@ class PendingTripCommentRead(BaseModel):
     cover_image_url: str | None
     start_date: datetime.date
     end_date: datetime.date
+
+
+class TripCommentPublic(BaseModel):
+    """Shown on the trip page. Only the author's first name — the rest of
+    their account (email, surname) is never exposed publicly."""
+
+    id: int
+    author_name: str
+    body: str
+    created_at: datetime.datetime
+
+
+class TripCommentAdminRead(BaseModel):
+    id: int
+    trip_id: int
+    trip_title: str
+    user_email: str
+    body: str
+    created_at: datetime.datetime

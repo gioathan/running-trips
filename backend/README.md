@@ -12,9 +12,11 @@ FastAPI (async), SQLAlchemy 2.0 (async, asyncpg), Alembic, Redis, ARQ
 
 ```bash
 cp backend/.env.example backend/.env
-# fill in at least: SECRET_KEY (any random string for local dev)
-# Stripe/Resend/R2 keys can stay blank locally — those integrations
-# no-op or log instead of failing when unconfigured.
+# fill in at least: SECRET_KEY (any random string for local dev; outside
+# ENVIRONMENT=local the app refuses to start unless it's a non-placeholder
+# value of 32+ characters).
+# Stripe/Resend/R2 keys can stay blank locally — emails are logged instead
+# of sent, and payments/uploads return a clear 503 SERVICE_NOT_CONFIGURED.
 
 docker compose up --build
 ```
@@ -81,13 +83,28 @@ diff for this — safe to accept or ignore.
 
 ## Endpoints added after the initial pass
 
-`GET /admin/auth/me` — added while wiring up the frontend's admin session
-check: `GET /users/me` is deliberately role-gated to `role=user` tokens only
-(`get_current_user`), so an admin access token can't use it to fetch its own
-profile. `admin_auth/router.py` now has its own `/me`, gated by
-`get_current_admin`, returning `AdminUserPublic`.
+- `GET /admin/auth/me` — `GET /users/me` is deliberately role-gated to
+  `role=user` tokens only, so the admin session check needs its own.
+- `GET /admin/payments?status=` and `POST /admin/payments/{id}/refund` —
+  payments list for the admin dashboard, and a full Stripe refund that also
+  marks the booking `refunded` (freeing its seats).
+- `GET /trips/{slug}/comments` (public, author first name only),
+  `GET /admin/trip-comments`, `DELETE /admin/trip-comments/{id}` — trip
+  comments are posted by runners with a confirmed booking once the trip has
+  ended (`POST /trip-comments`), shown on the trip page, moderated by admins.
 
-## What's implemented vs. left as a pattern to extend
+## Integrations and the env vars that switch them on
+
+| Env var | Effect when set |
+|---|---|
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Payments. Point a Stripe webhook (`payment_intent.succeeded`, `payment_intent.payment_failed`) at `/payments/webhook`; locally use `stripe listen --forward-to localhost:8000/payments/webhook`. |
+| `RESEND_API_KEY` | Transactional emails, sent in the user's `users.locale` (en/el). |
+| `RESEND_AUDIENCE_ID` | Newsletter subscribe/unsubscribe synced into that Resend Audience (broadcasts are sent from Resend's dashboard). One-way: unsubscribes made via a Resend broadcast's own link don't flow back into this app's list. |
+| `R2_*` | Admin image uploads (presigned PUT straight from the browser; images only). |
+| `PROXY_SHARED_SECRET` | Must match the frontend's `BACKEND_PROXY_SECRET`. Lets the backend trust the end-user IP the Next.js server forwards in `X-Client-IP`, so per-IP rate limits key on the real user rather than the frontend server. |
+| `REVALIDATE_SECRET` | Must match the frontend's. Admin writes to trips, race categories, content pages, site settings or trip comments then trigger on-demand ISR revalidation (`app/core/revalidation.py`, coalesced into one worker job per burst of edits). |
+
+## What's implemented
 
 Fully implemented end-to-end: auth (signup/login/refresh/logout/Google/
 verify-email/forgot-reset password), separate admin auth, users + travel
@@ -97,34 +114,41 @@ row-lock capacity enforcement), Stripe payments (create-intent + webhook),
 CMS pages/content sections/site settings, newsletter subscribe/unsubscribe,
 contact messages, R2 presigned uploads, audit log.
 
-The audit log is wired into a representative set of admin mutations (trip
-create/update/delete, booking status change, content page/settings update)
-as the pattern — extend `audit_service.record(...)` into the remaining admin
-write endpoints (race categories, images, inclusions, newsletter) the same
-way as you build out the admin dashboard.
+Every admin write endpoint records an `audit_log` row — keep calling
+`audit_service.record(...)` from new ones.
+
+Booking lifecycle details worth knowing:
+- Capacity counts *active* bookings (`pending`, `awaiting_payment`,
+  `confirmed`) under a row lock; trips that have started or are marked
+  "full" by the admin can't be booked.
+- The worker cron (every 5 min) cancels `pending` bookings older than 30 min
+  and `awaiting_payment` ones older than 60 min — the latter only after
+  cancelling the PaymentIntent on Stripe, so a late payment can't land on a
+  released seat.
+- The Stripe webhook is the source of truth for success, idempotent, and
+  never resurrects a cancelled booking (the payment is left `succeeded` for
+  an admin to refund).
+- Trip categories are updated in place by id on edit; removing a category
+  that has bookings, deleting a trip with bookings, or deleting a race
+  category still in use returns 409.
 
 ## Testing
 
-`requirements-dev.txt` adds pytest/pytest-asyncio/ruff. No tests are
-included yet — add them alongside each module as the frontend starts
-exercising the API, using a docker-compose Postgres override for the test DB
-rather than mocking the ORM.
+Tests run against a real Postgres and Redis (no mocked ORM) — see
+`tests/conftest.py`. Point `TEST_DATABASE_URL` at a throwaway database; it
+is migrated from scratch (downgrade base → upgrade head) and truncated
+between tests. Stripe/Resend/R2 are never called.
 
-## Verification note (this build pass)
+```bash
+docker compose exec postgres createdb -U runtrips runtrips_test
+docker compose exec \
+  -e TEST_DATABASE_URL=postgresql+asyncpg://runtrips:runtrips@postgres:5432/runtrips_test \
+  -e TEST_REDIS_URL=redis://redis:6379/15 \
+  api pytest
+```
 
-This environment's network policy blocks PyPI, so none of the Python
-dependencies above could actually be `pip install`-ed here to run the app
-live end-to-end. What *was* verified in this sandbox:
-
-- Every `.py` file compiles (`python3 -m py_compile`) — no syntax errors.
-- A custom AST-based check across the whole `app/` tree for unused imports
-  and undefined names — zero findings.
-- The full Alembic migration SQL applied and rolled back cleanly against a
-  real local PostgreSQL 16 (installed on this machine), including a data
-  smoke test inserting through every table.
-
-Run `docker compose up --build` in an environment with normal internet
-access to do a full live run (this is the one step I couldn't complete
-myself here) — if anything surfaces there, it'll most likely be in Pydantic
-schema/response-model shape rather than the schema or SQL layer, since that
-layer is now verified.
+Coverage focuses on the money and session paths: refresh-token rotation
+and its reuse grace window, single-use password reset, IP-keyed rate
+limits, capacity and booking expiry, webhook idempotency, refunds, trip
+editing with existing bookings, revalidation triggers, newsletter sync,
+trip comments, and the audit trail.

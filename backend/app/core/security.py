@@ -14,6 +14,21 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 JWT_ALGORITHM = "HS256"
 
+# A refresh token rotated less than this long ago may be presented again and
+# still yield a fresh pair: parallel requests from the same browser (e.g. the
+# Next.js middleware handling several prefetches at once) all carry the same
+# cookie, and without a grace window every one but the first would fail and
+# sign the user out. Tokens revoked by logout/password reset never qualify.
+REFRESH_REUSE_GRACE_SECONDS = 30
+
+
+def refresh_token_usable(revoked_at, rotated_at, expires_at, now) -> bool:
+    if expires_at < now:
+        return False
+    if revoked_at is None:
+        return True
+    return rotated_at is not None and (now - rotated_at).total_seconds() < REFRESH_REUSE_GRACE_SECONDS
+
 # Mirrors the frontend's signup/reset-password regex (frontend/src/lib/password.ts).
 STRONG_PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,128}$")
 
@@ -51,11 +66,11 @@ def decode_access_token(token: str) -> dict:
     return payload
 
 
-def create_purpose_token(user_id: int, purpose: str, ttl: datetime.timedelta) -> str:
+def create_purpose_token(user_id: int, purpose: str, ttl: datetime.timedelta, extra: dict | None = None) -> str:
     """Signed, expiring, single-purpose token for email links (verify-email,
     reset-password) — not a session token, so it carries a `purpose` claim
     that must match on decode."""
-    return _encode({"sub": str(user_id), "purpose": purpose, "type": "purpose"}, ttl)
+    return _encode({**(extra or {}), "sub": str(user_id), "purpose": purpose, "type": "purpose"}, ttl)
 
 
 def create_email_purpose_token(email: str, purpose: str, ttl: datetime.timedelta) -> str:
