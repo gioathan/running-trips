@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
-from app.core.dependencies import DbSession, Locale, get_current_admin, get_current_user
+from app.core.dependencies import DbSession, Locale, get_current_admin, get_current_user, rate_limit
 from app.core.pagination import Page, PageParams, page_params
 from app.modules.audit import service as audit_service
 from app.modules.bookings import service
@@ -10,7 +10,11 @@ from app.modules.users.models import User
 router = APIRouter(tags=["bookings"])
 
 
-@router.post("/bookings", response_model=BookingRead)
+@router.post(
+    "/bookings",
+    response_model=BookingRead,
+    dependencies=[Depends(rate_limit("bookings", max_attempts=10, window_seconds=600))],
+)
 async def create_booking(
     body: BookingCreate, db: DbSession, locale: Locale, current_user: User = Depends(get_current_user)
 ):

@@ -26,7 +26,10 @@ services:
       retries: 10
 
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "true"  # pytest/ruff for `docker compose exec api pytest`
     env_file: ./backend/.env
     ports:
       - "8000:8000"

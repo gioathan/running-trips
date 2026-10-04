@@ -1,3 +1,5 @@
+import datetime
+
 from pydantic import BaseModel
 
 
@@ -17,3 +19,16 @@ class PaymentRead(BaseModel):
     provider: str
     status: str
     amount_cents: int
+
+
+class PaymentAdminRead(BaseModel):
+    id: int
+    booking_id: int
+    booking_status: str
+    user_email: str
+    trip_title: str
+    provider: str
+    provider_ref: str
+    status: str
+    amount_cents: int
+    created_at: datetime.datetime

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -12,7 +12,8 @@ import { Spinner } from "@/components/ui/Feedback";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getStripe } from "@/lib/stripe";
 import { errorMessageKey } from "@/lib/error-messages";
-import type { CreateIntentResponse, Booking } from "@/types/api";
+import { useAuth } from "@/lib/auth-context";
+import type { CreateIntentResponse, Booking, TravelProfile } from "@/types/api";
 
 interface CheckoutModalProps {
   open: boolean;
@@ -31,14 +32,19 @@ interface ParticipantForm {
 
 function ParticipantsStep({
   participantCount,
+  prefill,
   onSubmit,
 }: {
   participantCount: number;
+  /** Participant 1's starting values — the signed-in user's own details. */
+  prefill: ParticipantForm;
   onSubmit: (participants: ParticipantForm[]) => void;
 }) {
   const t = useTranslations("checkout");
   const { control, register, handleSubmit } = useForm<{ participants: ParticipantForm[] }>({
-    defaultValues: { participants: Array.from({ length: participantCount }, () => ({ full_name: "" })) },
+    defaultValues: {
+      participants: Array.from({ length: participantCount }, (_, i) => (i === 0 ? prefill : { full_name: "" })),
+    },
   });
   const { fields } = useFieldArray({ control, name: "participants" });
 
@@ -74,6 +80,7 @@ function ParticipantsStep({
 
 function PaymentStep({ clientSecret, bookingId, onSuccess }: { clientSecret: string; bookingId: number; onSuccess: () => void }) {
   const t = useTranslations("checkout");
+  const locale = useLocale();
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,7 +92,7 @@ function PaymentStep({ clientSecret, bookingId, onSuccess }: { clientSecret: str
     setError(null);
     const { error: confirmError } = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: `${window.location.origin}/account?booking=${bookingId}` },
+      confirmParams: { return_url: `${window.location.origin}/${locale}/account?booking=${bookingId}` },
       redirect: "if_required",
     });
     if (confirmError) {
@@ -115,6 +122,20 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
   const [intent, setIntent] = useState<CreateIntentResponse | null>(null);
   const [bookingId, setBookingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  // Participant 1 is usually the person booking: start from their name and
+  // saved travel profile instead of a blank form. null = still loading.
+  const [prefill, setPrefill] = useState<ParticipantForm | null>(null);
+
+  useEffect(() => {
+    if (!open || prefill) return;
+    const base: ParticipantForm = { full_name: user?.full_name ?? "" };
+    apiFetch<TravelProfile>("/users/me/travel-profile")
+      .then((profile) =>
+        setPrefill({ ...base, nationality: profile.nationality ?? "", shirt_size: profile.shirt_size ?? "" })
+      )
+      .catch(() => setPrefill(base)); // not essential — fall back to just the name
+  }, [open, prefill, user]);
 
   const handleParticipants = async (participants: ParticipantForm[]) => {
     setError(null);
@@ -149,7 +170,14 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
         {t("totalDue", { total: ((pricePerPerson * participantCount * 100) / 100).toFixed(2) })}
       </p>
       {error && <FieldError>{error}</FieldError>}
-      {step === "participants" && <ParticipantsStep participantCount={participantCount} onSubmit={handleParticipants} />}
+      {step === "participants" &&
+        (prefill ? (
+          <ParticipantsStep participantCount={participantCount} prefill={prefill} onSubmit={handleParticipants} />
+        ) : (
+          <div className="flex justify-center py-10">
+            <Spinner />
+          </div>
+        ))}
       {step === "payment" && intent && bookingId && (
         <Elements stripe={getStripe()} options={{ clientSecret: intent.client_secret }}>
           <PaymentStep clientSecret={intent.client_secret} bookingId={bookingId} onSuccess={handleSuccess} />

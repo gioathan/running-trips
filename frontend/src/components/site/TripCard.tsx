@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -24,6 +25,7 @@ function BellIcon() {
 }
 
 export function TripCard({ trip, locale }: { trip: TripListItem; locale: string }) {
+  const t = useTranslations("trips");
   const prices = trip.categories.map((c) => c.price).filter((p) => p > 0);
   const fromPrice = prices.length > 0 ? Math.min(...prices) : null;
 
@@ -36,12 +38,12 @@ export function TripCard({ trip, locale }: { trip: TripListItem; locale: string 
               <Image src={trip.cover_image_url} alt={trip.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
             )}
             <div className="absolute left-4 top-4 flex gap-2">
-              {trip.is_featured && <Chip variant="editorial">Featured</Chip>}
-              {trip.is_full && <Chip variant="highlight">Full</Chip>}
+              {trip.is_featured && <Chip variant="editorial">{t("featured")}</Chip>}
+              {trip.is_full && <Chip variant="highlight">{t("full")}</Chip>}
             </div>
             {fromPrice !== null && (
               <span className="absolute bottom-4 right-4 rounded-full bg-ink px-4 py-1.5 text-label-md text-white shadow-hard">
-                From €{fromPrice}
+                {t("fromPrice", { price: fromPrice })}
               </span>
             )}
           </div>
@@ -86,13 +88,13 @@ export function TripCard({ trip, locale }: { trip: TripListItem; locale: string 
               href={`/trips/${trip.slug}`}
               className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-6 text-label-lg uppercase text-ink transition-shadow hover:shadow-hard"
             >
-              View trip
+              {t("viewTrip")}
             </Link>
             {trip.is_full && (
               <Link
                 href={{ pathname: "/contact", query: { tripId: trip.id } }}
-                aria-label="Ask to be notified if a spot opens"
-                title="Ask to be notified if a spot opens"
+                aria-label={t("notifyWhenAvailable")}
+                title={t("notifyWhenAvailable")}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink text-ink-muted hover:border-ink hover:text-ink"
               >
                 <BellIcon />

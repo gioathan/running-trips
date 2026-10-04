@@ -1,6 +1,9 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PLACEHOLDER_SECRET_KEYS = {"insecure-dev-key", "change-me-to-a-random-64-char-value"}
 
 
 class Settings(BaseSettings):
@@ -9,6 +12,15 @@ class Settings(BaseSettings):
     environment: str = "local"
     secret_key: str = "insecure-dev-key"
     frontend_origin: str = "http://localhost:3000"
+    # Shared with the Next.js server (BACKEND_PROXY_SECRET there). When a
+    # request carries it, the backend trusts its X-Client-IP header as the
+    # end user's IP — otherwise every proxied request would look like it came
+    # from the frontend server, collapsing per-IP rate limits into one bucket.
+    proxy_shared_secret: str | None = None
+    # Same value as REVALIDATE_SECRET in the frontend's env. When set, admin
+    # content writes trigger on-demand ISR revalidation on the frontend
+    # (FRONTEND_ORIGIN/api/revalidate) instead of waiting out the ISR window.
+    revalidate_secret: str | None = None
 
     database_url: str = "postgresql+asyncpg://runtrips:runtrips@localhost:5432/runtrips"
     redis_url: str = "redis://localhost:6379/0"
@@ -21,6 +33,9 @@ class Settings(BaseSettings):
     google_oauth_client_id: str | None = None
 
     resend_api_key: str | None = None
+    # Resend Audience that newsletter subscribers are synced into (broadcasts
+    # are sent from Resend's dashboard). Sync is skipped when unset.
+    resend_audience_id: str | None = None
     email_from: str = "ΑΛΛΟΥ <no-reply@example.com>"
 
     stripe_secret_key: str | None = None
@@ -31,6 +46,16 @@ class Settings(BaseSettings):
     r2_secret_access_key: str | None = None
     r2_bucket_name: str = "running-trips"
     r2_public_base_url: str = "https://media.example.com"
+
+    @model_validator(mode="after")
+    def _require_real_secret_outside_local(self) -> "Settings":
+        # The JWT signing key — a default/placeholder value outside local dev
+        # would let anyone mint admin tokens. Fail at startup instead.
+        if self.environment != "local" and (
+            self.secret_key in _PLACEHOLDER_SECRET_KEYS or len(self.secret_key) < 32
+        ):
+            raise ValueError("SECRET_KEY must be set to a random value of at least 32 characters outside local dev.")
+        return self
 
     @property
     def r2_endpoint_url(self) -> str | None:

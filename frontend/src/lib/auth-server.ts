@@ -51,60 +51,23 @@ export function clearAdminAuthCookies(res: NextResponse) {
   res.cookies.delete(ADMIN_REFRESH_TOKEN_COOKIE);
 }
 
-/** Server Component helper: who's signed in right now, if anyone —
- * refreshes once via the httpOnly refresh cookie if the access token has
- * expired. Returns null rather than throwing when there's no session. */
+/** Server Component helper: who's signed in right now, if anyone. Returns
+ * null rather than throwing when there's no session.
+ *
+ * Deliberately never refreshes: a Server Component can't set cookies, so
+ * rotating the refresh token here would revoke the one in the browser and
+ * discard its replacement. Refreshing happens in `middleware.ts` before the
+ * render, so the access-token cookie seen here is already fresh. */
 export async function getCurrentUser(): Promise<UserPublic | null> {
-  const cookieStore = cookies();
-  let accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
-
-  if (!accessToken) {
-    const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
-    if (!refreshToken) return null;
-    try {
-      const tokens = await backendFetch<TokenPair>("/auth/refresh", {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-      accessToken = tokens.access_token;
-      // Note: a Server Component can't set cookies on the response itself —
-      // the client-side AuthProvider's session check (GET /api/auth/session)
-      // is what actually persists a refreshed token back into the cookie jar.
-    } catch {
-      return null;
-    }
-  }
-
-  try {
-    return await backendFetch<UserPublic>("/users/me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-  } catch {
-    return null;
-  }
+  return (await requireUser())?.user ?? null;
 }
 
-/** Like `getCurrentUser`, but also returns the (possibly freshly-refreshed)
- * access token so a Server Component can make further authenticated
- * `backendFetch` calls of its own (e.g. `/users/me/bookings`) without
- * re-deriving it. Returns null if there's no valid session. */
+/** Like `getCurrentUser`, but also returns the access token so a Server
+ * Component can make further authenticated `backendFetch` calls of its own
+ * (e.g. `/users/me/bookings`). Returns null if there's no valid session. */
 export async function requireUser(): Promise<{ user: UserPublic; accessToken: string } | null> {
-  const cookieStore = cookies();
-  let accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
-
-  if (!accessToken) {
-    const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
-    if (!refreshToken) return null;
-    try {
-      const tokens = await backendFetch<TokenPair>("/auth/refresh", {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-      accessToken = tokens.access_token;
-    } catch {
-      return null;
-    }
-  }
+  const accessToken = cookies().get(ACCESS_TOKEN_COOKIE)?.value;
+  if (!accessToken) return null;
 
   try {
     const user = await backendFetch<UserPublic>("/users/me", { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -115,7 +78,8 @@ export async function requireUser(): Promise<{ user: UserPublic; accessToken: st
 }
 
 /** Admin equivalent of `getCurrentUser` — used to seed AdminAuthProvider
- * server-side so the admin shell doesn't flash a logged-out state. */
+ * server-side so the admin shell doesn't flash a logged-out state. Same
+ * no-refresh rule: `middleware.ts` refreshes admin sessions on /admin/*. */
 export async function getCurrentAdmin(): Promise<AdminUser | null> {
   const cookieStore = cookies();
   const accessToken = cookieStore.get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;

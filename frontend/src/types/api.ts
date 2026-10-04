@@ -32,6 +32,8 @@ export interface TokenPair {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  /** Echoed by /auth/refresh so the refresh cookie keeps the lifetime chosen at login. */
+  remember_me?: boolean;
 }
 
 export interface AuthResponse {
@@ -91,6 +93,7 @@ export interface TripListItem {
 
 export interface TripDetail extends TripListItem {
   description: string | null;
+  meta_description: string | null;
   images: string[];
 }
 
@@ -163,7 +166,38 @@ export interface BookingAdmin extends Booking {
   user_email: string;
 }
 
+export type PaymentStatus = "requires_payment" | "succeeded" | "failed" | "refunded";
+
+export interface PaymentAdmin {
+  id: number;
+  booking_id: number;
+  booking_status: BookingStatus;
+  user_email: string;
+  trip_title: string;
+  provider: string;
+  provider_ref: string;
+  status: PaymentStatus;
+  amount_cents: number;
+  created_at: string;
+}
+
 // --- Trip comments ---
+
+export interface TripCommentPublic {
+  id: number;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+export interface TripCommentAdmin {
+  id: number;
+  trip_id: number;
+  trip_title: string;
+  user_email: string;
+  body: string;
+  created_at: string;
+}
 
 export interface PendingTripComment {
   trip_id: number;

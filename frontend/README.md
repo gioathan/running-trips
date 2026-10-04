@@ -44,72 +44,59 @@ version, deliberately — mirrors the backend's own separate
 `refresh_tokens`/`admin_refresh_tokens` tables: a leaked or expired user
 session can never be valid against an admin endpoint or vice versa.
 
+**Session refresh happens in `src/middleware.ts`, never during render.**
+Server Components can read cookies but not set them, so refreshing there
+would rotate the refresh token on the backend and throw the new one away.
+The middleware refreshes an expiring access token before the page renders,
+writes the new cookies onto both the response and the in-flight request (so
+the render sees them), and clears them if the refresh token is dead. The
+`/api/*` proxies still refresh on their own after a 401. The backend accepts
+a just-rotated refresh token for 30 seconds, so parallel requests carrying
+the same cookie don't log the user out.
+
+Every proxied call also forwards the browser's IP (`X-Client-IP`) together
+with `BACKEND_PROXY_SECRET`, so the backend's per-IP rate limits apply per
+user rather than to this server as a whole.
+
 Public, cacheable reads (trip listings, CMS pages) do **not** go through
 either proxy — they're plain `backendFetch` calls from Server Components
 with Next's `next: { revalidate }`, so Next's own fetch cache/ISR actually
 applies. See `BACKEND_PLAN.md`'s Next.js caching split for the reasoning.
 
-## What's implemented vs. simplified vs. stubbed
+## What's implemented vs. simplified
 
-**Fully implemented**: the whole public site (Home, Destinations with
-filters/search/pagination, Trip detail, Services, Contact), the full
-booking + Stripe payment flow, auth (email/password + Google, remember me,
-forgot/reset password, email verification, newsletter unsubscribe), account
-pages (My Trips, profile — both basic info and travel profile), and an
-admin dashboard with working Trips CRUD (including images/inclusions),
-Bookings, Newsletter, and Contact Messages screens.
+**Implemented**: the whole public site (Home, Destinations with
+filters/search/pagination, Trip detail with runners' comments, Services,
+Contact), the booking + Stripe payment flow, auth (email/password + Google,
+remember me, forgot/reset password, email verification, newsletter
+unsubscribe), account pages, and the full admin dashboard: Trips (with R2
+image uploads), Race Categories, Content Pages, Site Settings, Bookings,
+Payments (with refunds), Newsletter, Contact Messages, Trip Comments.
+
+SEO: per-page titles/descriptions (`seo` namespace in the message catalogs),
+canonical + `hreflang` alternates between `/en` and `/el`, Open Graph data
+for trips, `sitemap.xml` (static pages + every published trip) and
+`robots.txt`. Absolute URLs come from `NEXT_PUBLIC_SITE_URL`.
 
 **Simplified from the original plan, on purpose**:
-- **Distance filter is single-select, not multi-select.** The Figma
-  reference showed multi-select pills, but the backend's
-  `GET /trips?category=` only accepts one slug. Built single-select to
-  match what the API actually supports rather than fake multi-select
-  client-side; extending the backend to accept repeated `category=` params
-  (OR'd) would be the way to add real multi-select later.
+- **Distance filter is single-select, not multi-select.** The backend's
+  `GET /trips?category=` only accepts one slug; extending it to accept
+  repeated `category=` params (OR'd) would be the way to add multi-select.
 - **Checkout collects a reduced participant field set**: full name,
-  nationality, shirt size. The backend's `booking_participants` also
-  supports date of birth, passport number, and an open `extra` JSONB bag —
-  left out of the form to keep checkout short; add fields to
+  nationality, shirt size (participant 1 prefilled from the user's name and
+  saved travel profile). Add fields to
   `components/site/CheckoutModal.tsx`'s `ParticipantForm` as needed.
-- **Admin image management is a URL-paste field, not a real upload
-  widget.** The backend's presigned-upload flow
-  (`POST /admin/uploads/presign`) exists and works, but
-  `TripImagesManager` doesn't yet call it — admin uploads to R2 by some
-  other means and pastes the resulting public URL. Wiring an actual
-  `<input type="file">` → presign → PUT-to-R2 → save-URL flow is the next
-  step here.
+- **Every public page renders per request**, because the layout reads the
+  session cookie to render the header. Backend data fetches inside those
+  renders are still cached (`next: { revalidate }`) and dropped on admin
+  saves via `/api/revalidate`, so the API isn't hit on every view.
 
-**Left as stubs** (admin sidebar links that render a "not built yet" panel
-naming exactly what backend endpoint to build against): Race Categories,
-Content Pages, Site Settings — all have working backend CRUD, just no
-frontend yet; build them the same way as `components/admin/TripForm.tsx`
-(the EN/EL tab pattern). Payments has **no** backend list endpoint yet
-(`payments/router.py` only has create-intent, get-by-id, and the
-webhook) — add `GET /admin/payments` before building that page.
+## Verification
 
-**Backend gap found and fixed while integrating**: admin access tokens
-couldn't fetch their own profile (`GET /users/me` is gated to `role=user`
-only) — added `GET /admin/auth/me` to `admin_auth/router.py`. See
-`backend/README.md`.
-
-## Verification note
-
-Same constraint as the backend: this sandbox's network policy blocks
-npm/PyPI, so nothing here could actually be `npm install`ed or run live.
-What was verified instead:
-- Every `.ts`/`.tsx` file's syntax, via the TypeScript compiler API's
-  `getSyntacticDiagnostics` directly (no `node_modules` needed for this —
-  it's pure parsing, not type resolution).
-- A custom unused-import sweep across the whole `src/` tree (same
-  approach as the backend's Python check) — zero findings on both.
-- The `messages/en.json` and `messages/el.json` key sets were
-  cross-checked programmatically against each other (identical key
-  structure, verified via a script, not by eye) and against every
-  `useTranslations`/`getTranslations` call site in the code.
-
-What this does **not** catch: real TypeScript type errors (needs the
-actual `react`/`next`/etc. type packages, unavailable here), and of course
-anything you'd only see at runtime — actual rendering, the real Stripe
-Elements flow, real Google Sign-In. Run `npm install && npm run dev`
-(and `npm run typecheck`) in an environment with normal internet access
-to do that pass — it's the one step I couldn't complete myself here.
+`npm run typecheck`, `npm run lint` and `npm run build` pass (and run in CI,
+`.github/workflows/ci.yml`). The session
+refresh, proxies, SEO output, admin screens and on-demand revalidation have
+been exercised end-to-end against the real backend (production build +
+uvicorn + ARQ worker + Postgres/Redis). Not yet exercised: a real Stripe
+payment (needs keys + `stripe listen`), real Google Sign-In, and real R2
+uploads (needs a bucket with CORS allowing `PUT` from the site's origin).

@@ -270,7 +270,17 @@ PATCH /admin/contact-messages/{id}
 
 Uploads (`admin`):
 ```
-POST /admin/uploads/presign            # returns R2 presigned PUT URL + public URL to store
+POST /admin/uploads/presign            # returns R2 presigned PUT URL + public URL to store; images only, extension derived from content type
+```
+
+Added after the original plan:
+```
+GET    /admin/payments?status=          # paginated
+POST   /admin/payments/{id}/refund      # full Stripe refund; marks payment + booking refunded
+POST   /trip-comments                   # user with a confirmed booking, after the trip ended
+GET    /trips/{slug}/comments           # public, author first name only
+GET    /admin/trip-comments             # paginated
+DELETE /admin/trip-comments/{id}
 ```
 
 ## 6. Auth flow detail
@@ -305,7 +315,18 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
   either version without more infra, so this wasn't worth the extra
   complexity for v1. Upgrading to sliding-window and/or adding an
   email-keyed dimension is a same-file change in `core/dependencies.py`'s
-  `rate_limit()` if abuse patterns show it's needed.
+  `rate_limit()` if abuse patterns show it's needed. The key is the *end
+  user's* IP: requests relayed by the Next.js server carry it in
+  `X-Client-IP`, trusted only alongside the shared `PROXY_SHARED_SECRET`;
+  direct callers are keyed on the socket peer (uvicorn reads it from
+  Caddy's `X-Forwarded-For` in prod). Also limited: signup, Google login,
+  reset-password, contact, and booking creation.
+- Refresh-token rotation allows a 30-second reuse window for a token that
+  was just rotated (`refresh_tokens.rotated_at`), so parallel requests
+  carrying the same cookie don't sign the user out; tokens revoked by
+  logout or password reset are never reusable. Password-reset links are
+  single-use (they embed a fingerprint of the current password hash) and a
+  reset revokes every existing session.
 - Admin auth is a separate path (`/admin/auth/*`, confirmed) rather than the
   same login gated by `role=admin`: email+password only (no Google OAuth for
   the admin path), its own refresh-token record type, and no cross-mixing
@@ -338,7 +359,15 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
    checked via Redis or a unique constraint) so retried webhooks don't
    double-process.
 6. A booking left `pending`/`awaiting_payment` past a TTL gets released by a
-   scheduled ARQ job (frees the seat).
+   scheduled ARQ job (frees the seat). For `awaiting_payment` the job first
+   cancels the PaymentIntent on Stripe and leaves the booking alone if
+   Stripe refuses (already paid/processing). The webhook only marks an
+   event processed after its DB work commits, and never confirms a booking
+   that was cancelled meanwhile — that payment is left `succeeded` for an
+   admin to refund from the payments screen.
+7. Trips that have started, or that the admin marked full
+   (`is_full_override`), reject new bookings; retrying checkout cancels the
+   user's own earlier `pending` booking for the same trip.
 
 ## 8. Background jobs (ARQ)
 
@@ -349,11 +378,14 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
   stored flag isn't strictly required; simplest to just filter
   `end_date < now()` at query time rather than add a job. Mentioned here as
   the alternative if you'd rather precompute.)
-- Release expired `pending` bookings back to available capacity — shipped as
-  a 5-minute ARQ cron job cancelling any `pending` booking older than 30
-  minutes (both numbers are just-picked defaults, easy to tune in
-  `bookings/service.py` / `workers/worker_settings.py` once real checkout
-  timing data exists).
+- Release expired bookings back to available capacity — a 5-minute ARQ cron
+  job cancelling `pending` bookings older than 30 minutes and
+  `awaiting_payment` ones older than 60 (see §7; just-picked defaults in
+  `bookings/service.py`).
+- On-demand frontend revalidation after admin content writes
+  (`app/core/revalidation.py` → `revalidate_frontend` job).
+- Newsletter: welcome email with an unsubscribe link, and subscribe /
+  unsubscribe synced into a Resend Audience (`RESEND_AUDIENCE_ID`).
 - Optional: periodic newsletter digest, if you don't just trigger campaigns
   manually through Resend's dashboard. Not implemented — still optional.
 
@@ -364,8 +396,8 @@ POST /admin/uploads/presign            # returns R2 presigned PUT URL + public U
 - **CORS**: locked to the known frontend origin(s).
 - **Validation**: Pydantic v2 schemas for all request/response bodies —
   never accept/return raw ORM objects.
-- **Testing**: pytest + pytest-asyncio, a test Postgres via docker-compose
-  override, factory-boy or plain fixtures for seed data.
+- **Testing**: pytest + pytest-asyncio against a real Postgres/Redis
+  (`TEST_DATABASE_URL`), plain fixtures for data — see `backend/README.md`.
 - **Observability**: structured logging (JSON) from day one; add
   Sentry later if/when it's worth the setup cost — not needed to launch.
 
@@ -437,19 +469,9 @@ frontend plan.
 
 ## 12. Next steps
 
-Backend is built — see `backend/README.md` for setup and the verification
-notes (this sandbox couldn't `pip install`/run it live due to network
-policy; it was checked via full syntax compilation, a static
-unused-import/undefined-name sweep, and the actual migration SQL applied,
-rolled back, and data-smoke-tested against a real local Postgres instead).
-
-One item flagged in that README worth repeating here: the `audit_log` write
-(§4 Ops) is only wired into a representative slice of admin mutations —
-trip create/update/delete, booking status change, content page/site-settings
-update — as the pattern to extend, not full coverage. Extend
-`audit_service.record(...)` into the remaining admin write endpoints (race
-categories, trip images/inclusions, newsletter) the same way as the admin
-dashboard gets built out.
-
-Next: `docs/FRONTEND_PLAN.md` and `docs/DESIGN_SYSTEM.md` for the Next.js
-side.
+Backend is built and tested (`backend/tests/`, run against a real Postgres
+and Redis) and has been exercised end-to-end with the frontend. The audit
+log now covers every admin write endpoint. CI runs ruff + pytest on every
+push/PR, and the prod compose file includes nightly Postgres backups (see
+`docs/DEPLOYMENT.md`). Remaining: real third-party credentials (Stripe
+webhook, Resend domain + audience, R2 bucket CORS) and a live payment run.

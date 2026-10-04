@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { backendFetch } from "@/lib/api";
+import { proxyHeaders } from "@/lib/proxy-headers";
 import { errorResponse } from "@/lib/api-server";
 import { setAdminAuthCookies } from "@/lib/auth-server";
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
   try {
     const data = await backendFetch<AdminAuthResponse>("/admin/auth/login", {
       method: "POST",
+      headers: proxyHeaders(req.headers),
       body: JSON.stringify(body),
     });
     const res = NextResponse.json({ user: data.user });

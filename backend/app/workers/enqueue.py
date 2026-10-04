@@ -17,6 +17,8 @@ async def _get_pool() -> ArqRedis:
 
 async def enqueue_email(task_name: str, **kwargs) -> None:
     """Enqueue a background job (matching a function name in
-    app.workers.tasks) instead of sending email inline on the request path."""
+    app.workers.tasks) instead of doing the work inline on the request path —
+    despite the name, used for any task (emails, frontend revalidation).
+    `_job_id`/`_defer_by` and other arq options pass straight through."""
     pool = await _get_pool()
     await pool.enqueue_job(task_name, **kwargs)

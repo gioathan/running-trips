@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { proxyHeaders } from "@/lib/proxy-headers";
 import {
   ADMIN_ACCESS_TOKEN_COOKIE,
   ADMIN_REFRESH_TOKEN_COOKIE,
@@ -29,6 +30,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
       method: req.method,
       headers: {
         "Content-Type": req.headers.get("content-type") ?? "application/json",
+        ...proxyHeaders(req.headers),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body,
@@ -43,7 +45,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     if (refreshToken) {
       const refreshRes = await fetch(`${BACKEND_URL}/admin/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...proxyHeaders(req.headers) },
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
       if (refreshRes.ok) {
@@ -55,7 +57,11 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     }
   }
 
-  const responseBody = await upstream.text();
+  // 204/205/304 must be relayed with a null body — passing even "" makes the
+  // Response constructor throw, turning every successful no-content call
+  // (newsletter subscribe, deletes, logout…) into a 500 for the browser.
+  const isNullBodyStatus = upstream.status === 204 || upstream.status === 205 || upstream.status === 304;
+  const responseBody = isNullBodyStatus ? null : await upstream.text();
   const res = new NextResponse(responseBody, {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },

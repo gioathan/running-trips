@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import InvalidCredentialsError, UnauthorizedError
-from app.core.security import create_access_token, generate_opaque_token, hash_opaque_token, verify_password
+from app.core.security import create_access_token, generate_opaque_token, hash_opaque_token, refresh_token_usable, verify_password
 from app.modules.admin_auth.models import AdminRefreshToken
 from app.modules.auth.service import get_user_by_email
 from app.modules.users.models import User, UserRole
@@ -56,10 +56,12 @@ async def rotate_admin_refresh_token(
     result = await db.execute(select(AdminRefreshToken).where(AdminRefreshToken.token_hash == token_hash))
     stored = result.scalar_one_or_none()
     now = datetime.datetime.now(datetime.UTC)
-    if stored is None or stored.revoked_at is not None or stored.expires_at < now:
+    if stored is None or not refresh_token_usable(stored.revoked_at, stored.rotated_at, stored.expires_at, now):
         raise UnauthorizedError("Refresh token is invalid or expired.")
 
-    stored.revoked_at = now
+    if stored.revoked_at is None:
+        stored.revoked_at = now
+        stored.rotated_at = now
     admin = await db.get(User, stored.admin_user_id)
     if admin is None or admin.role != UserRole.admin or not admin.is_active:
         raise UnauthorizedError("Account not found or inactive.")

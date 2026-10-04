@@ -72,28 +72,44 @@ async def delete_trip(trip_id: int, db: DbSession, current_admin: User = Depends
     await audit_service.record(db, current_admin.id, "delete", "trip", trip_id, {})
 
 
-@router.post("/admin/trips/{trip_id}/images", dependencies=[Depends(get_current_admin)])
-async def add_trip_image(trip_id: int, body: TripImageIn, db: DbSession):
-    return await service.add_image(db, trip_id, body)
+@router.post("/admin/trips/{trip_id}/images")
+async def add_trip_image(trip_id: int, body: TripImageIn, db: DbSession, current_admin: User = Depends(get_current_admin)):
+    image = await service.add_image(db, trip_id, body)
+    await audit_service.record(db, current_admin.id, "create", "trip_image", image["id"], {"trip_id": trip_id, "url": body.url})
+    return image
 
 
-@router.delete("/admin/trips/{trip_id}/images/{image_id}", status_code=204, dependencies=[Depends(get_current_admin)])
-async def delete_trip_image(trip_id: int, image_id: int, db: DbSession):
+@router.delete("/admin/trips/{trip_id}/images/{image_id}", status_code=204)
+async def delete_trip_image(trip_id: int, image_id: int, db: DbSession, current_admin: User = Depends(get_current_admin)):
     await service.delete_image(db, trip_id, image_id)
+    await audit_service.record(db, current_admin.id, "delete", "trip_image", image_id, {"trip_id": trip_id})
 
 
-@router.post("/admin/trips/{trip_id}/inclusions", dependencies=[Depends(get_current_admin)])
-async def add_trip_inclusion(trip_id: int, body: TripInclusionIn, db: DbSession):
-    return await service.add_inclusion(db, trip_id, body)
+@router.post("/admin/trips/{trip_id}/inclusions")
+async def add_trip_inclusion(
+    trip_id: int, body: TripInclusionIn, db: DbSession, current_admin: User = Depends(get_current_admin)
+):
+    inclusion = await service.add_inclusion(db, trip_id, body)
+    await audit_service.record(
+        db, current_admin.id, "create", "trip_inclusion", inclusion["id"], {"trip_id": trip_id, **body.model_dump(mode="json")}
+    )
+    return inclusion
 
 
-@router.patch("/admin/trips/{trip_id}/inclusions/{inclusion_id}", dependencies=[Depends(get_current_admin)])
-async def update_trip_inclusion(trip_id: int, inclusion_id: int, body: TripInclusionIn, db: DbSession):
-    return await service.update_inclusion(db, trip_id, inclusion_id, body)
+@router.patch("/admin/trips/{trip_id}/inclusions/{inclusion_id}")
+async def update_trip_inclusion(
+    trip_id: int, inclusion_id: int, body: TripInclusionIn, db: DbSession, current_admin: User = Depends(get_current_admin)
+):
+    inclusion = await service.update_inclusion(db, trip_id, inclusion_id, body)
+    await audit_service.record(
+        db, current_admin.id, "update", "trip_inclusion", inclusion_id, {"trip_id": trip_id, **body.model_dump(mode="json")}
+    )
+    return inclusion
 
 
-@router.delete(
-    "/admin/trips/{trip_id}/inclusions/{inclusion_id}", status_code=204, dependencies=[Depends(get_current_admin)]
-)
-async def delete_trip_inclusion(trip_id: int, inclusion_id: int, db: DbSession):
+@router.delete("/admin/trips/{trip_id}/inclusions/{inclusion_id}", status_code=204)
+async def delete_trip_inclusion(
+    trip_id: int, inclusion_id: int, db: DbSession, current_admin: User = Depends(get_current_admin)
+):
     await service.delete_inclusion(db, trip_id, inclusion_id)
+    await audit_service.record(db, current_admin.id, "delete", "trip_inclusion", inclusion_id, {"trip_id": trip_id})

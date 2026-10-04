@@ -3,18 +3,25 @@ import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import Page, PageParams, paginate
 from app.modules.contact.models import ContactMessage, InquiryType, MessageStatus
 from app.modules.contact.schemas import ContactMessageAdminRead
+from app.modules.trips.models import Trip
 from app.modules.users.models import User
 from app.workers.enqueue import enqueue_email
 
 
 async def create_message(db: AsyncSession, user: User, inquiry_type: str, trip_id: int | None, message: str) -> ContactMessage:
+    if trip_id is not None and await db.get(Trip, trip_id) is None:
+        raise NotFoundError("Trip not found.")  # rather than a foreign-key IntegrityError 500
+    try:
+        inquiry = InquiryType(inquiry_type)
+    except ValueError as exc:
+        raise ValidationAppError(f"Unknown inquiry type: {inquiry_type}") from exc
     contact_message = ContactMessage(
         user_id=user.id,
-        inquiry_type=InquiryType(inquiry_type),
+        inquiry_type=inquiry,
         trip_id=trip_id,
         message=message,
         created_at=datetime.datetime.now(datetime.UTC),

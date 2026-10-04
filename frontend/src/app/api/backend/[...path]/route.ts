@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { proxyHeaders } from "@/lib/proxy-headers";
 import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS_REMEMBER_ME,
   authCookieOptions,
 } from "@/lib/cookies";
+import type { TokenPair } from "@/types/api";
 
 const BACKEND_URL = process.env.BACKEND_URL;
 
@@ -37,6 +40,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
       method: req.method,
       headers: {
         "Content-Type": req.headers.get("content-type") ?? "application/json",
+        ...proxyHeaders(req.headers),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body,
@@ -44,26 +48,34 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   let accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
   let upstream = await doFetch(accessToken);
-  let refreshedCookies: { access: string; refresh: string } | null = null;
+  let refreshedCookies: { access: string; refresh: string; rememberMe: boolean } | null = null;
 
   if (upstream.status === 401) {
     const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
     if (refreshToken) {
       const refreshRes = await fetch(`${BACKEND_URL}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...proxyHeaders(req.headers) },
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
       if (refreshRes.ok) {
-        const tokens = (await refreshRes.json()) as { access_token: string; refresh_token: string };
-        refreshedCookies = { access: tokens.access_token, refresh: tokens.refresh_token };
+        const tokens = (await refreshRes.json()) as TokenPair;
+        refreshedCookies = {
+          access: tokens.access_token,
+          refresh: tokens.refresh_token,
+          rememberMe: Boolean(tokens.remember_me),
+        };
         accessToken = tokens.access_token;
         upstream = await doFetch(accessToken);
       }
     }
   }
 
-  const responseBody = await upstream.text();
+  // 204/205/304 must be relayed with a null body — passing even "" makes the
+  // Response constructor throw, turning every successful no-content call
+  // (newsletter subscribe, deletes, logout…) into a 500 for the browser.
+  const isNullBodyStatus = upstream.status === 204 || upstream.status === 205 || upstream.status === 304;
+  const responseBody = isNullBodyStatus ? null : await upstream.text();
   const res = new NextResponse(responseBody, {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
@@ -71,7 +83,11 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   if (refreshedCookies) {
     res.cookies.set(ACCESS_TOKEN_COOKIE, refreshedCookies.access, authCookieOptions(ACCESS_TOKEN_TTL_SECONDS));
-    res.cookies.set(REFRESH_TOKEN_COOKIE, refreshedCookies.refresh, authCookieOptions(REFRESH_TOKEN_TTL_SECONDS));
+    res.cookies.set(
+      REFRESH_TOKEN_COOKIE,
+      refreshedCookies.refresh,
+      authCookieOptions(refreshedCookies.rememberMe ? REFRESH_TOKEN_TTL_SECONDS_REMEMBER_ME : REFRESH_TOKEN_TTL_SECONDS)
+    );
   }
 
   return res;

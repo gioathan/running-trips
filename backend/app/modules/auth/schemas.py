@@ -58,6 +58,9 @@ class TokenPair(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    # Echoed on /auth/refresh so the frontend can keep the refresh cookie's
+    # lifetime in line with what was chosen at login.
+    remember_me: bool = False
 
 
 class UserPublic(BaseModel):

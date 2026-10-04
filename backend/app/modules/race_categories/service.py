@@ -78,5 +78,13 @@ async def update_category(db: AsyncSession, category_id: int, body: RaceCategory
 
 async def delete_category(db: AsyncSession, category_id: int) -> None:
     category = await get_category_or_404(db, category_id)
+    # trip_categories.race_category_id is ON DELETE RESTRICT — check first so
+    # the admin gets a clear 409 instead of an IntegrityError 500. Deferred
+    # import: trips.models imports this module's models at load time.
+    from app.modules.trips.models import TripCategory
+
+    in_use = await db.execute(select(TripCategory.id).where(TripCategory.race_category_id == category_id).limit(1))
+    if in_use.scalar_one_or_none() is not None:
+        raise ConflictError("This race category is used by one or more trips and can't be deleted.")
     await db.delete(category)
     await db.commit()

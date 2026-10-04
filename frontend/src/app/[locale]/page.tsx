@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { localizedAlternates } from "@/lib/seo";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { backendFetch } from "@/lib/api";
 import { SectionList } from "@/components/site/Section";
@@ -23,6 +25,14 @@ async function getFeaturedTrips(locale: string) {
   } catch {
     return [];
   }
+}
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {
+  const t = await getTranslations({ locale, namespace: "seo" });
+  return {
+    title: t("homeTitle"),
+    alternates: localizedAlternates(locale, "/"),
+  };
 }
 
 export default async function HomePage({ params: { locale } }: { params: { locale: string } }) {

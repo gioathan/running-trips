@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 
-from app.core.dependencies import DbSession, get_current_admin, rate_limit
+from app.core.dependencies import DbSession, client_ip, get_current_admin, rate_limit
 from app.modules.admin_auth import service
 from app.modules.admin_auth.schemas import (
     AdminAuthResponse,
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
 
 def _client_meta(request: Request) -> tuple[str | None, str | None]:
-    return request.headers.get("user-agent"), (request.client.host if request.client else None)
+    return request.headers.get("user-agent"), client_ip(request)
 
 
 @router.post(

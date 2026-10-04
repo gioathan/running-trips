@@ -1,9 +1,17 @@
+import asyncio
 import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, TripFullError, ValidationAppError
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    TripFullError,
+    TripNotBookableError,
+    ValidationAppError,
+)
 from app.core.i18n import resolve_translation
 from app.core.pagination import Page, PageParams, paginate
 from app.modules.bookings.models import ACTIVE_BOOKING_STATUSES, Booking, BookingParticipant, BookingStatus
@@ -14,22 +22,18 @@ from app.modules.bookings.schemas import (
     ParticipantRead,
     TripSummary,
 )
+from app.modules.payments import stripe_client
+from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.trips.models import Trip, TripCategory, TripStatus
 from app.modules.users.models import User
 
 PENDING_BOOKING_TTL_MINUTES = 30
+# Longer than the pending TTL: the user may be mid-way through Stripe's
+# payment form (3-D Secure etc.) once a PaymentIntent exists.
+AWAITING_PAYMENT_TTL_MINUTES = 60
 
 
-async def count_confirmed_participants(db: AsyncSession, trip_id: int) -> int:
-    result = await db.execute(
-        select(func.coalesce(func.sum(Booking.participant_count), 0)).where(
-            Booking.trip_id == trip_id, Booking.status == BookingStatus.confirmed
-        )
-    )
-    return int(result.scalar_one())
-
-
-async def _count_active_participants(db: AsyncSession, trip_id: int) -> int:
+async def count_active_participants(db: AsyncSession, trip_id: int) -> int:
     result = await db.execute(
         select(func.coalesce(func.sum(Booking.participant_count), 0)).where(
             Booking.trip_id == trip_id, Booking.status.in_(ACTIVE_BOOKING_STATUSES)
@@ -73,15 +77,32 @@ async def create_booking(db: AsyncSession, user: User, body: BookingCreate, loca
     trip = result.scalar_one_or_none()
     if trip is None or trip.status != TripStatus.published:
         raise NotFoundError("Trip not found.")
+    if trip.start_date < datetime.date.today():
+        raise TripNotBookableError("This trip has already started.")
+    if trip.is_full_override:
+        raise TripFullError("This trip is full.")
 
     trip_category = await db.get(TripCategory, body.trip_category_id)
     if trip_category is None or trip_category.trip_id != trip.id:
         raise NotFoundError("Race category not offered on this trip.")
 
+    # A user retrying checkout (closed the modal, changed participants) would
+    # otherwise leave their earlier, never-paid attempt holding seats until
+    # it expires. Only `pending` ones — an `awaiting_payment` booking has a
+    # live PaymentIntent and is released by the expiry job instead.
+    stale = await db.execute(
+        select(Booking).where(
+            Booking.user_id == user.id, Booking.trip_id == trip.id, Booking.status == BookingStatus.pending
+        )
+    )
+    for previous in stale.scalars().all():
+        previous.status = BookingStatus.cancelled
+    await db.flush()
+
     participant_count = len(body.participants)
 
     if trip.capacity is not None:
-        active = await _count_active_participants(db, trip.id)
+        active = await count_active_participants(db, trip.id)
         if active + participant_count > trip.capacity:
             raise TripFullError("This trip is full.")
 
@@ -162,9 +183,14 @@ async def list_bookings_admin(db: AsyncSession, status_filter: str | None, param
 async def update_booking_status_admin(db: AsyncSession, booking_id: int, new_status: str) -> BookingAdminRead:
     booking, trip = await _get_booking_with_trip(db, booking_id)
     try:
-        booking.status = BookingStatus(new_status)
+        status = BookingStatus(new_status)
     except ValueError as exc:
         raise ConflictError(f"Invalid booking status: {new_status}") from exc
+    if status == BookingStatus.refunded and booking.status != BookingStatus.refunded:
+        # "Refunded" has to mean money went back — that happens through
+        # POST /admin/payments/{id}/refund, which sets this status itself.
+        raise ConflictError("Refund the payment from the Payments screen; that marks the booking refunded.")
+    booking.status = status
     await db.commit()
     await db.refresh(booking)
     user = await db.get(User, booking.user_id)
@@ -173,14 +199,43 @@ async def update_booking_status_admin(db: AsyncSession, booking_id: int, new_sta
 
 
 async def release_expired_pending_bookings(db: AsyncSession) -> int:
-    """Frees seats held by abandoned bookings — run periodically by the
-    ARQ worker (BACKEND_PLAN.md §8)."""
-    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=PENDING_BOOKING_TTL_MINUTES)
+    """Frees seats held by abandoned checkouts — run periodically by the
+    ARQ worker (BACKEND_PLAN.md §8). Covers both `pending` (never reached
+    payment) and `awaiting_payment` (PaymentIntent created, never paid).
+    For the latter the PaymentIntent is cancelled on Stripe first, so a late
+    payment can't land on a booking whose seat was already given away; if
+    Stripe refuses (already paid/processing) the booking is left for the
+    webhook to confirm."""
+    now = datetime.datetime.now(datetime.UTC)
+    released = 0
+
+    pending_cutoff = now - datetime.timedelta(minutes=PENDING_BOOKING_TTL_MINUTES)
     result = await db.execute(
-        select(Booking).where(Booking.status == BookingStatus.pending, Booking.created_at < cutoff)
+        select(Booking).where(Booking.status == BookingStatus.pending, Booking.created_at < pending_cutoff)
     )
-    expired = result.scalars().all()
-    for booking in expired:
+    for booking in result.scalars().all():
         booking.status = BookingStatus.cancelled
+        released += 1
+
+    awaiting_cutoff = now - datetime.timedelta(minutes=AWAITING_PAYMENT_TTL_MINUTES)
+    result = await db.execute(
+        select(Booking).where(Booking.status == BookingStatus.awaiting_payment, Booking.updated_at < awaiting_cutoff)
+    )
+    for booking in result.scalars().all():
+        payments = (
+            await db.execute(
+                select(Payment).where(
+                    Payment.booking_id == booking.id, Payment.status == PaymentStatus.requires_payment
+                )
+            )
+        ).scalars().all()
+        cancelled = [await asyncio.to_thread(stripe_client.cancel_payment_intent, p.provider_ref) for p in payments]
+        if not all(cancelled):
+            continue
+        for payment in payments:
+            payment.status = PaymentStatus.failed
+        booking.status = BookingStatus.cancelled
+        released += 1
+
     await db.commit()
-    return len(expired)
+    return released

@@ -4,6 +4,7 @@ from app.core.dependencies import DbSession, get_current_admin, rate_limit
 from app.core.pagination import Page, PageParams, page_params
 from app.modules.newsletter import service
 from app.modules.newsletter.schemas import SubscribeRequest, SubscriberAdminRead, UnsubscribeRequest
+from app.workers.enqueue import enqueue_email
 
 router = APIRouter(tags=["newsletter"])
 
@@ -14,12 +15,17 @@ router = APIRouter(tags=["newsletter"])
     dependencies=[Depends(rate_limit("newsletter-subscribe", max_attempts=10, window_seconds=60))],
 )
 async def subscribe(body: SubscribeRequest, db: DbSession):
-    await service.subscribe(db, body.email, body.source)
+    if await service.subscribe(db, body.email, body.source):
+        email = body.email.lower()
+        await enqueue_email("sync_newsletter_contact", email=email, subscribed=True)
+        await enqueue_email("send_newsletter_welcome_email", email=email, locale=body.locale)
 
 
 @router.post("/newsletter/unsubscribe", status_code=204)
 async def unsubscribe(body: UnsubscribeRequest, db: DbSession):
-    await service.unsubscribe(db, body.token)
+    email = await service.unsubscribe(db, body.token)
+    if email:
+        await enqueue_email("sync_newsletter_contact", email=email, subscribed=False)
 
 
 @router.get(

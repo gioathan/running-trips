@@ -6,6 +6,8 @@ from pydantic import BaseModel, EmailStr
 class SubscribeRequest(BaseModel):
     email: EmailStr
     source: str | None = None
+    # Language of the welcome email (subscribers have no account/users.locale).
+    locale: str = "en"
 
 
 class UnsubscribeRequest(BaseModel):

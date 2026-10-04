@@ -153,15 +153,14 @@ out, else opens a checkout modal), full `description`, complete
     from the original "proceeds to booking form → travel-profile
     completion if needed" idea: rather than requiring the account-level
     travel profile to be complete first, checkout just collects a reduced
-    field set inline every time. Trade-off: faster/simpler checkout, at
-    the cost of not reusing saved travel-profile data automatically —
-    prefilling from `GET /users/me/travel-profile` when signed in would
-    close that gap.
-  - **Not shipped**: mobile bottom-sheet variant of the booking widget
-    (renders as a normal sticky sidebar block on mobile too — still
-    usable, just not the distinct mobile treatment originally sketched),
-    and "related trips" (same primary race category) at the bottom of the
-    page.
+    field set inline every time. Participant 1 is prefilled from the
+    signed-in user's name and saved travel profile
+    (`GET /users/me/travel-profile`).
+  - **Mobile**: below `lg` the booking widget becomes a fixed bar pinned
+    above the bottom nav (from-price + CTA) that opens the same controls in
+    a bottom sheet (`Modal variant="sheet"`).
+  - **Related trips**: up to 3 upcoming trips sharing the primary race
+    category, topped up with other upcoming trips.
 
 **Services** — Widget grid (5 cards, from Figma variant 1), comparison
 table (Standard vs. Us — optional, nice-to-have), FAQ (from variant 2),
@@ -212,41 +211,29 @@ for primary actions and status highlights) but utility layout:
   `/admin/auth/*`), no Google OAuth, own session — this route is excluded
   from the public sitemap/nav entirely.
 
-**Status per sidebar section, as shipped** — built to a "representative
-module, fully done" depth (Trips) plus everything else that was
-low-effort/high-value given existing backend support, same spirit as the
-backend's own audit-log pattern:
+**Status per sidebar section** — all built:
 
 | Section | Status |
 |---|---|
-| Dashboard | Stat tiles wired to real counts (trips, confirmed bookings, subscribers, new contact messages) via existing paginated endpoints' `total` field — no dedicated stats endpoint needed. |
-| Trips | **Fully built** — list, create, edit (EN/EL tabs, categories), plus images and inclusions management. This is the pattern to copy for Race Categories/Content Pages. |
-| Bookings | Built — list + inline status change. |
-| Newsletter Subscribers | Built — list. |
-| Contact Messages | Built — list + inline status change. |
-| Race Categories | **Stub only** (backend CRUD exists) — same EN/EL form pattern as Trips, much smaller. |
-| Content Pages | **Stub only** (backend CRUD exists) — needs a per-slug editor with an add/remove/reorder section list, each section type keyed to `components/site/sections/types.ts`'s shapes. |
-| Site Settings | **Stub only** (backend CRUD exists) — a simple key/value editor would cover it. |
-| Payments | **Stub only** — and blocked on the backend: no `GET /admin/payments` list endpoint exists yet (`payments/router.py` only has create-intent, get-by-id, and the webhook). |
-
-Trip image management shipped as a **manual URL-paste field**, not the
-originally-planned drag-reorderable gallery wired to the R2 presign flow —
-`POST /admin/uploads/presign` works and is ready to call, but no
-`<input type="file">` → presign → PUT-to-R2 → save-URL flow was wired up
-in `TripImagesManager.tsx`. That's the next piece of work there.
+| Dashboard | Stat tiles wired to real counts via existing paginated endpoints' `total` field. |
+| Trips | List, create, edit (EN/EL tabs incl. SEO description, categories updated in place by id), images and cover uploaded to R2 via `POST /admin/uploads/presign` (URL paste kept as a fallback), inclusions. |
+| Race Categories, Content Pages, Site Settings | Built (EN/EL editors; Content Pages edits each section type's shape from `components/site/sections/types.ts`). |
+| Bookings, Contact Messages | List + inline status change. |
+| Payments | List with status filter + full Stripe refund (`GET /admin/payments`, `POST /admin/payments/{id}/refund`). Payments that succeeded on a non-confirmed booking (flagged by the webhook) are highlighted. |
+| Newsletter | List. |
+| Trip Comments | Added after the original plan: list + delete for the comments runners post after a trip. |
 
 ## 9. Data fetching & caching (recap, ties to BACKEND_PLAN.md)
 
 - Public content pages (Home, Services, Contact copy, Destinations listing,
   Trip detail): Next.js ISR, short revalidate window + on-demand
-  revalidation triggered by the admin's save (backend calls a
-  `/api/revalidate` route handler with a shared secret). The route handler
-  itself is built (`POST /api/revalidate`, secret-checked, calls
-  `revalidatePath`) — the backend side of this (calling out to it after a
-  content save) was **not** wired up, so it's relying on the short ISR
-  window alone for now. Low priority: `content/service.py`'s
-  `update_page`/`update_site_settings` would need an HTTP call to
-  `${FRONTEND_URL}/api/revalidate` with the shared secret.
+  revalidation triggered by the admin's save: a backend middleware
+  (`app/core/revalidation.py`) queues one coalesced worker job after any
+  admin write to trips, race categories, content pages, site settings or
+  trip comments, which calls `POST /api/revalidate` with the shared secret.
+  In practice the pages themselves render per request (the layout reads
+  the session cookie for the header), so what's cached and revalidated is
+  the backend data fetched inside them.
 - Identity/money/admin routes (login, My Trips, booking, payment, all of
   `/admin`): `force-dynamic`/`no-store`, always fresh, hit the API through
   the same-origin proxy with credentials.
@@ -262,7 +249,10 @@ in `TripImagesManager.tsx`. That's the next piece of work there.
   pre-resolved from the API for the active locale — the frontend never
   needs its own copy of that text.
 - `<html lang>` per route, `hreflang` alternates between `/en/x` and
-  `/el/x`, locale-aware sitemap.
+  `/el/x`, locale-aware sitemap — implemented (`lib/seo.ts`,
+  `app/sitemap.ts`, `app/robots.ts`, `generateMetadata` on each public
+  page; trip pages add Open Graph images and the admin-editable
+  `meta_description`).
 
 ## 11. Decisions locked in
 
@@ -280,14 +270,7 @@ in `TripImagesManager.tsx`. That's the next piece of work there.
 
 ## 12. Next steps
 
-Frontend is built — see `frontend/README.md` for setup, the auth-proxy
-architecture, and verification notes (same network-sandbox caveat as the
-backend: nothing here could be `npm install`ed or run live in this
-environment; verified via TypeScript syntax parsing, an unused-import
-sweep, and programmatic EN/EL message-key parity checks instead).
-
-Remaining work, roughly in priority order: real Google/Stripe keys and a
-live end-to-end run; the real logo assets; the admin upload-widget flow;
-Race Categories/Content Pages/Site Settings admin screens; a
-`GET /admin/payments` backend endpoint plus its admin screen; wiring the
-backend's content-save path to call `/api/revalidate`.
+Built, and exercised end-to-end against the real backend (see
+`frontend/README.md`). Remaining, roughly in priority order: real
+Google/Stripe/R2/Resend credentials and a live payment run with
+`stripe listen`; the real logo assets.

@@ -16,7 +16,9 @@ def build_unsubscribe_token(email: str) -> str:
     return create_email_purpose_token(email, PURPOSE_UNSUBSCRIBE, datetime.timedelta(days=365))
 
 
-async def subscribe(db: AsyncSession, email: str, source: str | None) -> None:
+async def subscribe(db: AsyncSession, email: str, source: str | None) -> bool:
+    """Returns True if this created or reactivated a subscription (False if
+    the address was already subscribed) — the caller only syncs/welcomes then."""
     email = email.lower()
     result = await db.execute(select(NewsletterSubscriber).where(NewsletterSubscriber.email == email))
     subscriber = result.scalar_one_or_none()
@@ -26,11 +28,14 @@ async def subscribe(db: AsyncSession, email: str, source: str | None) -> None:
     elif subscriber.unsubscribed_at is not None:
         subscriber.unsubscribed_at = None
         subscriber.subscribed_at = now
-    # else: already subscribed — no-op, dedupe on email per BACKEND_PLAN.md.
+    else:
+        return False  # already subscribed — no-op, dedupe on email per BACKEND_PLAN.md.
     await db.commit()
+    return True
 
 
-async def unsubscribe(db: AsyncSession, token: str) -> None:
+async def unsubscribe(db: AsyncSession, token: str) -> str | None:
+    """Returns the email that was unsubscribed, or None if it already was."""
     try:
         payload = decode_purpose_token(token, PURPOSE_UNSUBSCRIBE)
     except Exception as exc:
@@ -41,6 +46,8 @@ async def unsubscribe(db: AsyncSession, token: str) -> None:
     if subscriber and subscriber.unsubscribed_at is None:
         subscriber.unsubscribed_at = datetime.datetime.now(datetime.UTC)
         await db.commit()
+        return subscriber.email
+    return None
 
 
 async def list_subscribers_admin(db: AsyncSession, params: PageParams) -> Page[SubscriberAdminRead]:
