@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 
@@ -31,7 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 async def create_intent(db: AsyncSession, user: User, booking_id: int) -> CreateIntentResponse:
-    booking = await db.get(Booking, booking_id)
+    # Row lock: a double-clicked "continue to payment" sends two requests;
+    # the second waits here, then finds the first one's Payment below and
+    # reuses its PaymentIntent instead of creating a second one.
+    result = await db.execute(select(Booking).where(Booking.id == booking_id).with_for_update())
+    booking = result.scalar_one_or_none()
     if booking is None:
         raise NotFoundError("Booking not found.")
     if booking.user_id != user.id:
@@ -48,12 +53,16 @@ async def create_intent(db: AsyncSession, user: User, booking_id: int) -> Create
     )
     existing = result.scalar_one_or_none()
     if existing:
-        intent = stripe.PaymentIntent.retrieve(existing.provider_ref)
+        intent = await asyncio.to_thread(stripe.PaymentIntent.retrieve, existing.provider_ref)
+        await db.commit()  # release the row lock
         return CreateIntentResponse(
             payment_id=existing.id, client_secret=intent.client_secret, amount_cents=existing.amount_cents
         )
 
-    intent = stripe_client.create_payment_intent(booking.total_amount_cents, metadata={"booking_id": str(booking.id)})
+    # stripe-python is synchronous — run it off the event loop.
+    intent = await asyncio.to_thread(
+        stripe_client.create_payment_intent, booking.total_amount_cents, {"booking_id": str(booking.id)}
+    )
     payment = Payment(
         booking_id=booking.id,
         provider_ref=intent.id,
@@ -185,7 +194,7 @@ async def refund_payment(db: AsyncSession, payment_id: int) -> PaymentAdminRead:
     if not get_settings().stripe_secret_key:
         raise ServiceNotConfiguredError("Payments are not configured (STRIPE_SECRET_KEY is unset).")
     try:
-        stripe_client.refund_payment_intent(payment.provider_ref)
+        await asyncio.to_thread(stripe_client.refund_payment_intent, payment.provider_ref)
     except stripe.StripeError as exc:
         raise ConflictError(f"Stripe refused the refund: {exc.user_message or exc}") from exc
 

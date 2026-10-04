@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 
 from sqlalchemy import func, select
@@ -182,9 +183,14 @@ async def list_bookings_admin(db: AsyncSession, status_filter: str | None, param
 async def update_booking_status_admin(db: AsyncSession, booking_id: int, new_status: str) -> BookingAdminRead:
     booking, trip = await _get_booking_with_trip(db, booking_id)
     try:
-        booking.status = BookingStatus(new_status)
+        status = BookingStatus(new_status)
     except ValueError as exc:
         raise ConflictError(f"Invalid booking status: {new_status}") from exc
+    if status == BookingStatus.refunded and booking.status != BookingStatus.refunded:
+        # "Refunded" has to mean money went back — that happens through
+        # POST /admin/payments/{id}/refund, which sets this status itself.
+        raise ConflictError("Refund the payment from the Payments screen; that marks the booking refunded.")
+    booking.status = status
     await db.commit()
     await db.refresh(booking)
     user = await db.get(User, booking.user_id)
@@ -223,7 +229,8 @@ async def release_expired_pending_bookings(db: AsyncSession) -> int:
                 )
             )
         ).scalars().all()
-        if not all(stripe_client.cancel_payment_intent(p.provider_ref) for p in payments):
+        cancelled = [await asyncio.to_thread(stripe_client.cancel_payment_intent, p.provider_ref) for p in payments]
+        if not all(cancelled):
             continue
         for payment in payments:
             payment.status = PaymentStatus.failed

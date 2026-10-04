@@ -3,6 +3,7 @@
 // "errors" namespace in messages/{locale}.json.
 const CODE_TO_KEY: Record<string, string> = {
   INVALID_CREDENTIALS: "invalidCredentials",
+  ADMIN_ACCOUNT: "adminAccount",
   EMAIL_ALREADY_REGISTERED: "emailAlreadyRegistered",
   TRIP_FULL: "tripFull",
   TRIP_NOT_BOOKABLE: "tripNotBookable",

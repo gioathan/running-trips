@@ -42,7 +42,8 @@
     "rateLimited": "Too many attempts — please try again in a moment.",
     "conflict": "That didn't go through — please try again.",
     "generic": "Something went wrong. Please try again.",
-    "tripNotBookable": "This trip can no longer be booked."
+    "tripNotBookable": "This trip can no longer be booked.",
+    "adminAccount": "This is an admin account — sign in at /admin/login."
   },
   "footer": {
     "subscribeSuccess": "You're subscribed — see you at the start line.",

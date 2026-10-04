@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import EmailAlreadyRegisteredError, InvalidCredentialsError, UnauthorizedError
+from app.core.exceptions import AdminAccountError, EmailAlreadyRegisteredError, InvalidCredentialsError, UnauthorizedError
 from app.core.security import (
     create_access_token,
     create_purpose_token,
@@ -52,7 +52,17 @@ async def authenticate(db: AsyncSession, email: str, password: str) -> User:
         raise InvalidCredentialsError("Incorrect email or password.")
     if not user.is_active:
         raise InvalidCredentialsError("Account is disabled.")
+    _reject_admin(user)
     return user
+
+
+def _reject_admin(user: User) -> None:
+    # A user-flow session for an admin is useless — every user endpoint
+    # rejects role=admin tokens (get_current_user) — so say where to go
+    # instead of issuing it. Checked only after the password/Google token is
+    # verified, so it doesn't reveal which emails are admins.
+    if user.role == UserRole.admin:
+        raise AdminAccountError("Admin accounts sign in at /admin/login.")
 
 
 async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, locale: str) -> User:
@@ -75,9 +85,13 @@ async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, local
     )
     oauth_account = result.scalar_one_or_none()
     if oauth_account:
-        return await db.get(User, oauth_account.user_id)
+        user = await db.get(User, oauth_account.user_id)
+        _reject_admin(user)
+        return user
 
     user = await get_user_by_email(db, email) if email else None
+    if user is not None:
+        _reject_admin(user)
     if user is not None and not claims.get("email_verified"):
         # Linking to an existing account by an email Google hasn't verified
         # would let someone who merely *claims* that address take it over.

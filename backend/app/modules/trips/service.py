@@ -24,9 +24,13 @@ from app.modules.trips.schemas import (
 
 
 async def get_trip_stats(db: AsyncSession) -> TripStats:
-    races_organized = (await db.execute(select(func.count(Trip.id)))).scalar_one()
+    # Public marketing numbers — drafts and archived trips don't count.
+    published = Trip.status == TripStatus.published
+    races_organized = (await db.execute(select(func.count(Trip.id)).where(published))).scalar_one()
     countries = (
-        await db.execute(select(func.count(func.distinct(Trip.location_country))).where(Trip.location_country.isnot(None)))
+        await db.execute(
+            select(func.count(func.distinct(Trip.location_country))).where(published, Trip.location_country.isnot(None))
+        )
     ).scalar_one()
     return TripStats(races_organized=races_organized, countries=countries)
 

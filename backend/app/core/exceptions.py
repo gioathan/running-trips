@@ -63,6 +63,10 @@ class TripFullError(ConflictError):
     code = "TRIP_FULL"
 
 
+class AdminAccountError(ForbiddenError):
+    code = "ADMIN_ACCOUNT"
+
+
 class TripNotBookableError(ConflictError):
     code = "TRIP_NOT_BOOKABLE"
 
