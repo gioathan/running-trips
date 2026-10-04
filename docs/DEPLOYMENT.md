@@ -48,14 +48,26 @@ the database and cache directly to the internet with only their own
 6. `cp .env.prod.example .env` at the repo root, fill in a real
    `POSTGRES_PASSWORD` and your `API_DOMAIN`.
 7. `cp backend/.env.example backend/.env`, fill in real values — at
-   minimum: `SECRET_KEY` (long random string), `DATABASE_URL` with the
+   minimum: `SECRET_KEY` (random, 32+ characters — the API refuses to start
+   outside `ENVIRONMENT=local` with a placeholder), `ENVIRONMENT=production`,
+   `PROXY_SHARED_SECRET` and `REVALIDATE_SECRET` (random values, shared with
+   Vercel below), `DATABASE_URL` with the
    **same** password you just put in the root `.env`
    (`postgresql+asyncpg://runtrips:<that password>@postgres:5432/runtrips`),
    `FRONTEND_ORIGIN` set to your real Vercel URL (e.g.
    `https://yourapp.vercel.app`, or your custom domain if you attach one to
    Vercel), and the Stripe/Resend/R2/Google keys once you have them —
-   the app runs without them (each integration no-ops or logs instead of
-   failing), so you can deploy before every third-party account is set up.
+   the app runs without them (emails are logged instead of sent; payments
+   and uploads return a clear 503), so you can deploy before every
+   third-party account is set up. When you add them:
+   - **Stripe**: add a webhook endpoint `https://api.yourdomain.com/payments/webhook`
+     for `payment_intent.succeeded` and `payment_intent.payment_failed`, and
+     put its signing secret in `STRIPE_WEBHOOK_SECRET`.
+   - **R2**: set the bucket's CORS policy to allow `PUT` (with a
+     `Content-Type` header) from your site's origin — admin uploads go
+     straight from the browser to the bucket.
+   - **Resend**: verify your sending domain; set `RESEND_AUDIENCE_ID` to
+     sync newsletter subscribers into an Audience.
 8. `docker compose -f docker-compose.prod.yml up -d --build`. First boot
    runs `alembic upgrade head` automatically (baked into the `api`
    container's command) before starting the server.
@@ -71,9 +83,12 @@ the database and cache directly to the internet with only their own
    - `BACKEND_URL` = `https://api.yourdomain.com` (server-only — never
      exposed to the browser; see `frontend/README.md`'s auth-proxy
      architecture for why every backend call is server-side)
-   - `REVALIDATE_SECRET` = same value you'd give the backend if/when you
-     wire up on-demand revalidation (see `FRONTEND_PLAN.md` §9 — not
-     wired up yet, safe to set now regardless)
+   - `BACKEND_PROXY_SECRET` = the backend's `PROXY_SHARED_SECRET` (lets
+     backend rate limits see the real user IP)
+   - `REVALIDATE_SECRET` = the backend's `REVALIDATE_SECRET` (admin saves
+     refresh the public site immediately)
+   - `NEXT_PUBLIC_SITE_URL` = the public site origin, e.g.
+     `https://yourdomain.com` (canonical/hreflang URLs, sitemap)
    - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID`,
      `NEXT_PUBLIC_MEDIA_HOSTNAME` — same values as the backend's
      corresponding keys where applicable (Stripe/Google), safe to leave
@@ -93,13 +108,37 @@ the database and cache directly to the internet with only their own
   (`alembic upgrade head` runs on every `api` container start — safe to
   run repeatedly, it's a no-op once the DB is current).
 
+## Backups
+
+The `backup` service in `docker-compose.prod.yml` runs `ops/backup.sh`: a
+`pg_dump` at startup and every 24 hours after, written to `./backups` on the
+VM and pruned after `BACKUP_RETENTION_DAYS` (default 14). Set the
+`BACKUP_S3_*` values in the root `.env` to also copy each dump off the VM —
+a backup that only lives on the VM's own disk doesn't survive losing the
+VM. Use a **private** bucket (e.g. a second R2 bucket, not the public media
+one) with its own access key.
+
+- Check it's working: `docker compose -f docker-compose.prod.yml logs backup`
+  should show `[backup] wrote …` (and `uploaded to …` if off-site is on).
+- Take one now: `docker compose -f docker-compose.prod.yml exec backup sh /backup.sh --once`
+- Restore (stops writes first, replaces the current data):
+  ```bash
+  docker compose -f docker-compose.prod.yml stop api worker
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    psql -U runtrips -d postgres -c "DROP DATABASE runtrips" -c "CREATE DATABASE runtrips OWNER runtrips"
+  gunzip -c backups/runtrips-<timestamp>.sql.gz \
+    | docker compose -f docker-compose.prod.yml exec -T postgres psql -U runtrips -d runtrips
+  docker compose -f docker-compose.prod.yml start api worker
+  ```
+- Practise a restore into a scratch database once, before you need it.
+
 ## Not set up yet (flagging, not blocking)
 
-- **Backups**: no automated Postgres backup/snapshot. A `pg_dump` cron job
-  writing to R2 (or the VM host's own snapshot feature, if the provider
-  has one) is the next thing to add before this holds real customer data.
+
 - **Monitoring/alerting**: nothing beyond `docker compose logs`. Fine to
   start; revisit if uptime starts to matter more than "check it
   occasionally."
-- **CI**: no automated test/build check before merge — matches
-  `BACKEND_PLAN.md` §9's "no tests are included yet."
+- **CD for the backend**: CI (`.github/workflows/ci.yml` — backend ruff +
+  pytest against Postgres/Redis services, frontend typecheck/lint/build)
+  runs on every push and PR, but deploying to the VM is still the manual
+  `git pull && docker compose … up -d --build` above.
