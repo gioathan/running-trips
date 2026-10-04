@@ -1,0 +1,2 @@
+# Postgres dumps written by the prod `backup` service — customer data, never commit.
+/backups/

@@ -40,7 +40,12 @@ services:
         condition: service_healthy
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
+    # --proxy-headers/--forwarded-allow-ips: take the client IP from the
+    # X-Forwarded-For header Caddy sets (Caddy replaces any client-supplied
+    # value), so rate limits key on the real caller rather than Caddy's
+    # container IP. Trusting '*' is safe only because `api` isn't reachable
+    # except through Caddy.
     # No `ports:` and no source bind-mount (unlike the dev compose file) —
     # only reachable through the Caddy container, and runs the image as
     # built rather than live-reloading from a host mount.
@@ -55,6 +60,30 @@ services:
       redis:
         condition: service_healthy
     command: ["arq", "app.workers.worker_settings.WorkerSettings"]
+
+  backup:
+    # Nightly pg_dump → ./backups on the VM (+ optional off-site copy to
+    # S3/R2) — see ops/backup.sh for the restore command. Same image as
+    # `postgres` so pg_dump matches the server's major version.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-runtrips}
+      POSTGRES_DB: ${POSTGRES_DB:-runtrips}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: auto
+    volumes:
+      - ./ops/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   caddy:
     image: caddy:2-alpine
