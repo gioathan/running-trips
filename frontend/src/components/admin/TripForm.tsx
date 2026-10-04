@@ -10,9 +10,14 @@ import { Input, Label, Textarea, FieldError } from "@/components/ui/Input";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { adminApiFetch, ApiError } from "@/lib/api";
+import { ImageUploadButton } from "@/components/admin/ImageUploadButton";
 import type { RaceCategory, TripAdmin } from "@/types/api";
 
 interface CategoryRow {
+  // Existing trip_categories row id ("" for a newly added row). Sent back so
+  // the backend updates rows in place — bookings reference them. Not named
+  // `id`: useFieldArray reserves that for its own row keys.
+  trip_category_id: string;
   race_category_id: string;
   price: string;
   capacity: string;
@@ -32,10 +37,12 @@ interface FormValues {
   en_title: string;
   en_summary: string;
   en_description: string;
+  en_meta_description: string;
   en_duration_label: string;
   el_title: string;
   el_summary: string;
   el_description: string;
+  el_meta_description: string;
   el_duration_label: string;
   categories: CategoryRow[];
 }
@@ -55,12 +62,15 @@ function toDefaults(trip: TripAdmin | undefined): FormValues {
     en_title: trip?.translations.en?.title ?? "",
     en_summary: trip?.translations.en?.summary ?? "",
     en_description: trip?.translations.en?.description ?? "",
+    en_meta_description: trip?.translations.en?.meta_description ?? "",
     en_duration_label: trip?.translations.en?.duration_label ?? "",
     el_title: trip?.translations.el?.title ?? "",
     el_summary: trip?.translations.el?.summary ?? "",
     el_description: trip?.translations.el?.description ?? "",
+    el_meta_description: trip?.translations.el?.meta_description ?? "",
     el_duration_label: trip?.translations.el?.duration_label ?? "",
     categories: trip?.categories.map((c) => ({
+      trip_category_id: String(c.id),
       race_category_id: String(c.race_category.id),
       price: String(c.price),
       capacity: c.capacity != null ? String(c.capacity) : "",
@@ -75,6 +85,7 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { isSubmitting },
   } = useForm<FormValues>({ defaultValues: toDefaults(trip) });
   const { fields, append, remove } = useFieldArray({ control, name: "categories" });
@@ -98,6 +109,7 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
           title: values.en_title,
           summary: values.en_summary || null,
           description: values.en_description || null,
+          meta_description: values.en_meta_description || null,
           duration_label: values.en_duration_label || null,
         },
         {
@@ -105,12 +117,14 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
           title: values.el_title,
           summary: values.el_summary || null,
           description: values.el_description || null,
+          meta_description: values.el_meta_description || null,
           duration_label: values.el_duration_label || null,
         },
       ],
       categories: values.categories
         .filter((c) => c.race_category_id)
         .map((c) => ({
+          id: c.trip_category_id ? Number(c.trip_category_id) : null,
           race_category_id: Number(c.race_category_id),
           price: Number(c.price),
           capacity: c.capacity ? Number(c.capacity) : null,
@@ -181,7 +195,13 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
           </div>
           <div>
             <Label htmlFor="cover_image_url">Cover image URL</Label>
-            <Input id="cover_image_url" {...register("cover_image_url")} />
+            <div className="flex items-start gap-2">
+              <Input id="cover_image_url" className="flex-1" {...register("cover_image_url")} />
+              <ImageUploadButton
+                label="Upload"
+                onUploaded={(url) => setValue("cover_image_url", url, { shouldDirty: true })}
+              />
+            </div>
           </div>
         </div>
         <div className="mt-4 flex gap-6">
@@ -237,6 +257,10 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
                 <Label htmlFor={`${locale}_description`}>Full description</Label>
                 <Textarea id={`${locale}_description`} rows={6} {...register(`${locale}_description`)} />
               </div>
+              <div>
+                <Label htmlFor={`${locale}_meta_description`}>SEO description (search results &amp; link previews)</Label>
+                <Input id={`${locale}_meta_description`} maxLength={300} {...register(`${locale}_meta_description`)} />
+              </div>
             </Tabs.Content>
           ))}
         </Tabs.Root>
@@ -245,7 +269,7 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
       <Card className="p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-headline-sm">Race categories &amp; pricing</h2>
-          <Button type="button" variant="ghost" size="sm" onClick={() => append({ race_category_id: "", price: "", capacity: "" })}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => append({ trip_category_id: "", race_category_id: "", price: "", capacity: "" })}>
             Add category
           </Button>
         </div>

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { localizedAlternates } from "@/lib/seo";
 import type { SVGProps } from "react";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { backendFetch } from "@/lib/api";
@@ -40,6 +42,15 @@ const CONTACT_ICONS: ((props: IconProps) => React.JSX.Element)[] = [
     </Icon>
   ),
 ];
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {
+  const t = await getTranslations({ locale, namespace: "seo" });
+  return {
+    title: t("contactTitle"),
+    description: t("contactDescription"),
+    alternates: localizedAlternates(locale, "/contact"),
+  };
+}
 
 export default async function ContactPage({ params: { locale } }: { params: { locale: string } }) {
   setRequestLocale(locale);

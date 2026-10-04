@@ -22,6 +22,7 @@ const NAV_SECTIONS = [
       { href: "/admin/payments", label: "Payments" },
       { href: "/admin/newsletter", label: "Newsletter" },
       { href: "/admin/contact-messages", label: "Contact Messages" },
+      { href: "/admin/trip-comments", label: "Trip Comments" },
     ],
   },
 ];

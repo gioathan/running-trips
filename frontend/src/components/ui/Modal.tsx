@@ -11,16 +11,27 @@ interface ModalProps {
   className?: string;
   title: string;
   hideTitle?: boolean;
+  /** "sheet" slides up from the bottom edge, full-width — for mobile panels. */
+  variant?: "center" | "sheet";
 }
 
-export function Modal({ open, onOpenChange, children, className, title, hideTitle }: ModalProps) {
+// Kept as two complete sets rather than overrides: `cn` is plain clsx (no
+// tailwind-merge), so conflicting position classes wouldn't reliably win.
+const VARIANT_CLASSES = {
+  center:
+    "left-1/2 top-1/2 max-h-[90vh] w-[calc(100%-32px)] max-w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-md border p-10",
+  sheet: "inset-x-0 bottom-0 max-h-[85vh] w-full rounded-t-2xl border-t p-6 pb-8",
+};
+
+export function Modal({ open, onOpenChange, children, className, title, hideTitle, variant = "center" }: ModalProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-32px)] max-w-[480px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md border border-ink bg-white p-10 shadow-hard",
+            "fixed z-50 overflow-y-auto border-ink bg-white shadow-hard",
+            VARIANT_CLASSES[variant],
             className
           )}
         >

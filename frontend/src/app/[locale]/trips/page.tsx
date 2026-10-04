@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { localizedAlternates } from "@/lib/seo";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { backendFetch, qs } from "@/lib/api";
 import { TripCard } from "@/components/site/TripCard";
@@ -15,6 +17,15 @@ interface SearchParams {
   category?: string;
   q?: string;
   page?: string;
+}
+
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {
+  const t = await getTranslations({ locale, namespace: "seo" });
+  return {
+    title: t("tripsTitle"),
+    description: t("tripsDescription"),
+    alternates: localizedAlternates(locale, "/trips"),
+  };
 }
 
 export default async function TripsPage({

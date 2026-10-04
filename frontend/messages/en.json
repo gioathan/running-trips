@@ -41,7 +41,8 @@
     "forbidden": "You don't have access to that.",
     "rateLimited": "Too many attempts — please try again in a moment.",
     "conflict": "That didn't go through — please try again.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "tripNotBookable": "This trip can no longer be booked."
   },
   "footer": {
     "subscribeSuccess": "You're subscribed — see you at the start line.",
@@ -75,7 +76,12 @@
     "bannerBody": "Tell us your goal race and group size — we'll put together a bespoke itinerary within 48 hours.",
     "bannerCta": "Request a custom trip",
     "bannerStat1Label": "Races organized",
-    "bannerStat2Label": "Countries"
+    "bannerStat2Label": "Countries",
+    "featured": "Featured",
+    "full": "Full",
+    "fromPrice": "From €{price}",
+    "viewTrip": "View trip",
+    "notifyWhenAvailable": "Ask to be notified if a spot opens"
   },
   "account": {
     "pageTitle": "My Trips",
@@ -124,7 +130,12 @@
     "increase": "Add a participant",
     "total": "Total",
     "full": "Full",
-    "bookNow": "Book now"
+    "bookNow": "Book now",
+    "included": "Included",
+    "bookingClosed": "Booking closed",
+    "commentsHeadline": "What runners said",
+    "commentsCount": "{count, plural, one {# comment} other {# comments}}",
+    "relatedHeadline": "More trips like this"
   },
   "checkout": {
     "modalTitle": "Complete your booking",
@@ -179,5 +190,17 @@
     "success": "Your email is verified.",
     "error": "This verification link is invalid or has expired.",
     "backToHome": "Back to home"
+  },
+  "seo": {
+    "siteName": "ΑΛΛΟΥ",
+    "defaultTitle": "ΑΛΛΟΥ — Travel beyond the finish line",
+    "defaultDescription": "Small-group running trips built around the world's great races — race entry, hotel and logistics handled, so you only have to run.",
+    "homeTitle": "Running trips to the world's great races",
+    "tripsTitle": "Upcoming running trips",
+    "tripsDescription": "Browse upcoming and past running trips — marathons, half marathons and 10Ks, with race entry and travel included.",
+    "servicesTitle": "Services",
+    "servicesDescription": "Everything a race trip needs: entries, hotels, transfers, and a team on the ground.",
+    "contactTitle": "Contact",
+    "contactDescription": "Questions about a trip, a booking, or a custom race trip? Get in touch with the ΑΛΛΟΥ team."
   }
 }

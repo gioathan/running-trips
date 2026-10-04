@@ -5,6 +5,7 @@ const CODE_TO_KEY: Record<string, string> = {
   INVALID_CREDENTIALS: "invalidCredentials",
   EMAIL_ALREADY_REGISTERED: "emailAlreadyRegistered",
   TRIP_FULL: "tripFull",
+  TRIP_NOT_BOOKABLE: "tripNotBookable",
   NOT_FOUND: "notFound",
   VALIDATION_ERROR: "validationError",
   UNAUTHORIZED: "unauthorized",

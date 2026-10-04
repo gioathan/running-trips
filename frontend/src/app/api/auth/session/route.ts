@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { proxyHeaders } from "@/lib/proxy-headers";
 import { backendFetch, ApiError } from "@/lib/api";
 import { setUserAuthCookies, clearUserAuthCookies } from "@/lib/auth-server";
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/cookies";
@@ -9,7 +10,7 @@ import type { TokenPair, UserPublic } from "@/types/api";
  * in, if anyone" — transparently refreshes and re-persists cookies if the
  * access token has expired, so a page reload doesn't silently sign someone
  * out just because 15 minutes passed. */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
   const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
@@ -41,17 +42,12 @@ export async function GET() {
   try {
     const tokens = await backendFetch<TokenPair>("/auth/refresh", {
       method: "POST",
+      headers: proxyHeaders(req.headers),
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     const user = await tryMe(tokens.access_token);
     const res = NextResponse.json({ user });
-    // The refresh response doesn't echo back the original remember_me flag,
-    // so default the *cookie's* maxAge conservatively short here — the
-    // underlying refresh token's real TTL (governed server-side by what was
-    // chosen at login) is unaffected; this only means a "remembered" session
-    // re-persists its cookie on every active visit rather than getting one
-    // long-lived cookie up front, which is a fine tradeoff over guessing true.
-    setUserAuthCookies(res, tokens, false);
+    setUserAuthCookies(res, tokens, Boolean(tokens.remember_me));
     return res;
   } catch {
     const res = NextResponse.json({ user: null });

@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages, setRequestLocale } from "next-intl/server";
+import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { Inter } from "next/font/google";
 import { notFound } from "next/navigation";
 import { routing, type Locale } from "@/i18n/routing";
 import { getCurrentUser } from "@/lib/auth-server";
+import { SITE_URL } from "@/lib/seo";
 import { backendFetch, qs } from "@/lib/api";
 import { AppProviders } from "@/components/layout/AppProviders";
 import { Header } from "@/components/layout/Header";
@@ -16,9 +17,15 @@ import "../globals.css";
 
 const inter = Inter({ subsets: ["latin", "greek"], variable: "--font-inter" });
 
-export const metadata: Metadata = {
-  title: "ΑΛΛΟΥ — Travel beyond the finish line",
-};
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {
+  const t = await getTranslations({ locale, namespace: "seo" });
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: t("defaultTitle"), template: `%s — ${t("siteName")}` },
+    description: t("defaultDescription"),
+    openGraph: { siteName: t("siteName"), locale: locale === "el" ? "el_GR" : "en_US", type: "website" },
+  };
+}
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { proxyHeaders } from "@/lib/proxy-headers";
 import { backendFetch, ApiError } from "@/lib/api";
 import { setAdminAuthCookies, clearAdminAuthCookies } from "@/lib/auth-server";
 import { ADMIN_ACCESS_TOKEN_COOKIE, ADMIN_REFRESH_TOKEN_COOKIE } from "@/lib/cookies";
@@ -12,7 +13,7 @@ interface AdminUser {
   role: string;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
   const refreshToken = cookieStore.get(ADMIN_REFRESH_TOKEN_COOKIE)?.value;
@@ -40,6 +41,7 @@ export async function GET() {
   try {
     const tokens = await backendFetch<TokenPair>("/admin/auth/refresh", {
       method: "POST",
+      headers: proxyHeaders(req.headers),
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     const admin = await tryMe(tokens.access_token);

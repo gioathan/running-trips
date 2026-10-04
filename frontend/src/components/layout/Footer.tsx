@@ -17,6 +17,7 @@ const LINK_COLUMNS = [
 
 function NewsletterForm() {
   const t = useTranslations("footer");
+  const locale = useLocale();
   const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,7 +26,10 @@ function NewsletterForm() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await apiFetch("/newsletter/subscribe", { method: "POST", body: JSON.stringify({ email, source: "footer" }) });
+      await apiFetch("/newsletter/subscribe", {
+        method: "POST",
+        body: JSON.stringify({ email, source: "footer", locale }),
+      });
       showToast(t("subscribeSuccess"));
       setEmail("");
     } catch {

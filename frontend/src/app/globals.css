@@ -12,6 +12,15 @@
   }
 }
 
+/* Trip pages pin BookingWidget's booking bar above the mobile bottom nav
+   (below lg). The footer only reserves room for the nav itself, so give it
+   the bar's height too — otherwise the bar covers the end of the page. */
+@media (max-width: 1023.98px) {
+  body:has([data-mobile-booking-bar]) footer {
+    padding-bottom: 4.5rem;
+  }
+}
+
 @layer utilities {
   /* Hard 2px offset shadow used for active/hover lift on cards + primary
      buttons — see docs/DESIGN_SYSTEM.md "Elevation & Depth". */
