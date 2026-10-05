@@ -4,6 +4,7 @@ import { backendFetch } from "@/lib/api";
 import { ADMIN_ACCESS_TOKEN_COOKIE } from "@/lib/cookies";
 import { AdminButtonLink } from "@/components/admin/AdminButtonLink";
 import { AdminDataTable, type AdminColumn } from "@/components/admin/AdminDataTable";
+import { DeleteTripButton } from "@/components/admin/DeleteTripButton";
 import type { Page, TripAdmin } from "@/types/api";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +18,12 @@ const columns: AdminColumn<TripAdmin>[] = [
   {
     header: "",
     render: (t) => (
-      <Link href={`/admin/trips/${t.id}/edit`} className="text-primary underline">
-        Edit
-      </Link>
+      <span className="flex items-center gap-4">
+        <Link href={`/admin/trips/${t.id}/edit`} className="text-primary underline">
+          Edit
+        </Link>
+        <DeleteTripButton tripId={t.id} title={t.translations.en?.title ?? t.slug} />
+      </span>
     ),
   },
 ];

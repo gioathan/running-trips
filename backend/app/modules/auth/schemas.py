@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.security import is_strong_password
@@ -28,6 +30,9 @@ class LoginRequest(BaseModel):
 class GoogleLoginRequest(BaseModel):
     id_token: str
     locale: str = "en"
+    # Which button was pressed. "login" never creates an account — someone
+    # with no account is told to sign up; only "signup" creates one.
+    intent: Literal["login", "signup"] = "login"
 
 
 class RefreshRequest(BaseModel):

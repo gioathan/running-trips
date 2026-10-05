@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # content writes trigger on-demand ISR revalidation on the frontend
     # (FRONTEND_ORIGIN/api/revalidate) instead of waiting out the ISR window.
     revalidate_secret: str | None = None
+    # Ceiling on requests per minute from one client IP across the whole API
+    # (core/hardening.py). Unset = 300 everywhere except local dev, where it
+    # is off: the dev frontend has no proxy secret, so every request would
+    # share one bucket. Set to 0 to disable.
+    global_rate_limit_per_minute: int | None = None
+    max_request_body_bytes: int = 1_048_576
 
     database_url: str = "postgresql+asyncpg://runtrips:runtrips@localhost:5432/runtrips"
     redis_url: str = "redis://localhost:6379/0"
@@ -55,7 +61,18 @@ class Settings(BaseSettings):
             self.secret_key in _PLACEHOLDER_SECRET_KEYS or len(self.secret_key) < 32
         ):
             raise ValueError("SECRET_KEY must be set to a random value of at least 32 characters outside local dev.")
+        # Without it the backend can't tell end users apart behind the
+        # frontend server, so every per-IP rate limit collapses into one
+        # shared bucket — fail at startup rather than degrade silently.
+        if self.environment != "local" and not self.proxy_shared_secret:
+            raise ValueError("PROXY_SHARED_SECRET must be set outside local dev (same value as the frontend's BACKEND_PROXY_SECRET).")
         return self
+
+    @property
+    def effective_global_rate_limit(self) -> int:
+        if self.global_rate_limit_per_minute is not None:
+            return self.global_rate_limit_per_minute
+        return 0 if self.environment == "local" else 300
 
     @property
     def r2_endpoint_url(self) -> str | None:

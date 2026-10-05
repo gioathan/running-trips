@@ -12,9 +12,10 @@ import { CheckoutModal } from "./CheckoutModal";
 import type { TripCategory } from "@/types/api";
 
 /**
- * Desktop (lg+): a sticky card in the sidebar column. Below lg: a fixed bar
- * pinned above the mobile bottom nav (price + CTA) that opens the same
- * controls in a bottom sheet (FRONTEND_PLAN.md §7). One set of state drives
+ * Desktop (lg+): a sticky card in the sidebar column. Below lg: the race
+ * choice inline in the page, plus a fixed bar pinned above the mobile bottom
+ * nav (selected race, total, CTA) that opens the full controls in a bottom
+ * sheet (FRONTEND_PLAN.md §7). One set of state drives
  * both, and the checkout modal is rendered once.
  */
 export function BookingWidget({
@@ -30,7 +31,6 @@ export function BookingWidget({
   isBookable: boolean;
 }) {
   const t = useTranslations("tripDetail");
-  const tTrips = useTranslations("trips");
   const { user } = useAuth();
   const { open: openLoginModal } = useLoginModal();
   const [selectedCategoryId, setSelectedCategoryId] = useState(categories[0]?.id);
@@ -43,7 +43,6 @@ export function BookingWidget({
     [categories, selectedCategoryId]
   );
   const total = (selectedCategory?.price ?? 0) * count;
-  const fromPrice = Math.min(...categories.map((c) => c.price));
 
   const handleBookNow = () => {
     if (isFull || !isBookable) return;
@@ -67,7 +66,7 @@ export function BookingWidget({
     </Chip>
   ) : null;
 
-  const controls = (
+  const raceChoice = (
     <>
       <p className="text-label-md uppercase text-ink-muted">{t("selectCategory")}</p>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -76,6 +75,7 @@ export function BookingWidget({
             key={c.id}
             type="button"
             onClick={() => setSelectedCategoryId(c.id)}
+            aria-pressed={c.id === selectedCategory?.id}
             className={
               c.id === selectedCategory?.id
                 ? "rounded-full border border-ink bg-ink px-4 py-1 text-label-md uppercase text-white"
@@ -86,6 +86,12 @@ export function BookingWidget({
           </button>
         ))}
       </div>
+    </>
+  );
+
+  const controls = (
+    <>
+      {raceChoice}
 
       <div className="mt-6 flex items-center justify-between">
         <p className="text-label-md uppercase text-ink-muted">{t("participants")}</p>
@@ -130,12 +136,25 @@ export function BookingWidget({
       {/* top-20 clears the sticky header's shrunk height so none of the card hides behind it */}
       <Card className="sticky top-20 hidden p-6 lg:block">{controls}</Card>
 
+      {/* Below lg the races and their prices sit in the page itself (the
+          trip page places this block right under the title), so the choice
+          is visible without opening anything. */}
+      <div className="lg:hidden">{raceChoice}</div>
+
       {/* bottom-16 sits on top of MobileBottomNav (h-16, below md); from md up there's no bottom nav */}
       <div
         data-mobile-booking-bar
         className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-4 border-t border-ink/10 bg-white px-4 py-3 shadow-hard md:bottom-0 lg:hidden"
       >
-        <p className="text-label-lg uppercase">{tTrips("fromPrice", { price: fromPrice })}</p>
+        {/* The selected race and what it costs — not just a "from" price —
+            so switching race above visibly changes what "Book now" books. */}
+        <div className="min-w-0">
+          <p className="truncate text-label-sm uppercase text-ink-muted">
+            {selectedCategory?.race_category.name}
+            {count > 1 ? ` × ${count}` : ""}
+          </p>
+          <p className="text-headline-sm">€{total.toFixed(2)}</p>
+        </div>
         {status ? (
           <div className="w-40">{status}</div>
         ) : (

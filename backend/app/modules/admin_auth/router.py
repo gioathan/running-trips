@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from app.core.dependencies import DbSession, client_ip, get_current_admin, rate_limit
+from app.core.ratelimit import throttled_login
 from app.modules.admin_auth import service
 from app.modules.admin_auth.schemas import (
     AdminAuthResponse,
@@ -24,7 +25,7 @@ def _client_meta(request: Request) -> tuple[str | None, str | None]:
     dependencies=[Depends(rate_limit("admin-login", max_attempts=5, window_seconds=60))],
 )
 async def admin_login(body: AdminLoginRequest, request: Request, db: DbSession):
-    admin = await service.authenticate_admin(db, body.email, body.password)
+    admin = await throttled_login("admin", body.email, lambda: service.authenticate_admin(db, body.email, body.password))
     user_agent, ip = _client_meta(request)
     access_token, refresh_token = await service.issue_admin_tokens(db, admin, user_agent, ip)
     return AdminAuthResponse(

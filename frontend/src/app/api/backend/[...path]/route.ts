@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { proxyHeaders } from "@/lib/proxy-headers";
+import { isAllowedUserProxyPath } from "@/lib/proxy-paths";
 import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
@@ -31,8 +32,13 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     return NextResponse.json({ code: "SERVER_MISCONFIGURED", message: "BACKEND_URL not set" }, { status: 500 });
   }
 
+  if (!isAllowedUserProxyPath(path)) {
+    return NextResponse.json({ code: "NOT_FOUND", message: "Not found" }, { status: 404 });
+  }
+
   const cookieStore = cookies();
-  const targetPath = `/${path.join("/")}${req.nextUrl.search}`;
+  // Segments are re-encoded so nothing in them can alter the backend path.
+  const targetPath = `/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
   const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.text();
 
   const doFetch = (accessToken: string | undefined) =>
@@ -80,6 +86,8 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
   });
+  const retryAfter = upstream.headers.get("retry-after");
+  if (retryAfter) res.headers.set("Retry-After", retryAfter); // tells a rate-limited client when to try again
 
   if (refreshedCookies) {
     res.cookies.set(ACCESS_TOKEN_COOKIE, refreshedCookies.access, authCookieOptions(ACCESS_TOKEN_TTL_SECONDS));

@@ -4,6 +4,9 @@
 const CODE_TO_KEY: Record<string, string> = {
   INVALID_CREDENTIALS: "invalidCredentials",
   ADMIN_ACCOUNT: "adminAccount",
+  USE_GOOGLE_SIGN_IN: "useGoogleSignIn",
+  USE_PASSWORD_SIGN_IN: "usePasswordSignIn",
+  GOOGLE_ACCOUNT_NOT_REGISTERED: "googleAccountNotRegistered",
   EMAIL_ALREADY_REGISTERED: "emailAlreadyRegistered",
   TRIP_FULL: "tripFull",
   TRIP_NOT_BOOKABLE: "tripNotBookable",

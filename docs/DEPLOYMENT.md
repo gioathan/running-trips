@@ -50,7 +50,8 @@ the database and cache directly to the internet with only their own
 7. `cp backend/.env.example backend/.env`, fill in real values — at
    minimum: `SECRET_KEY` (random, 32+ characters — the API refuses to start
    outside `ENVIRONMENT=local` with a placeholder), `ENVIRONMENT=production`,
-   `PROXY_SHARED_SECRET` and `REVALIDATE_SECRET` (random values, shared with
+   `PROXY_SHARED_SECRET` (required — the API refuses to start without it
+   outside local dev) and `REVALIDATE_SECRET` (random values, shared with
    Vercel below), `DATABASE_URL` with the
    **same** password you just put in the root `.env`
    (`postgresql+asyncpg://runtrips:<that password>@postgres:5432/runtrips`),
@@ -66,6 +67,12 @@ the database and cache directly to the internet with only their own
    - **R2**: set the bucket's CORS policy to allow `PUT` (with a
      `Content-Type` header) from your site's origin — admin uploads go
      straight from the browser to the bucket.
+   - **Google sign-in**: a full-page redirect, not Google's embedded
+     button. On the OAuth client (type "Web application") add the site's
+     callback under **Authorised redirect URIs** —
+     `https://yourdomain.com/api/auth/google/callback` (and
+     `http://localhost:3000/api/auth/google/callback` for local dev). It must
+     match `NEXT_PUBLIC_SITE_URL` exactly. No client secret is used.
    - **Resend**: verify your sending domain; set `RESEND_AUDIENCE_ID` to
      sync newsletter subscribers into an Audience.
 8. `docker compose -f docker-compose.prod.yml up -d --build`. First boot
@@ -107,6 +114,37 @@ the database and cache directly to the internet with only their own
   This rebuilds the `api`/`worker` images and re-runs migrations
   (`alembic upgrade head` runs on every `api` container start — safe to
   run repeatedly, it's a no-op once the DB is current).
+
+## Security and caching — what's in place, and what it depends on
+
+- **Rate limits** (Redis): per endpoint and visitor IP on every auth,
+  contact, booking and newsletter endpoint; per *account* on sign-in (20
+  wrong passwords in 15 minutes pauses that account's sign-in); and a global
+  ceiling of 300 requests/minute per visitor
+  (`GLOBAL_RATE_LIMIT_PER_MINUTE`). All of it relies on the backend seeing
+  the real visitor IP, which needs `PROXY_SHARED_SECRET` (backend) =
+  `BACKEND_PROXY_SECRET` (Vercel). If Redis is down the limiters let
+  requests through and log an error rather than taking sign-in down.
+- **API surface**: interactive docs are off outside local dev; request
+  bodies are capped at 1 MB (API + Caddy); responses carry security headers
+  and per-user responses are `no-store`; the container runs as a non-root
+  user.
+- **Frontend**: a Content-Security-Policy and the usual security headers
+  (`next.config.mjs`). If you add another third-party script, payment
+  method or media host, it must be added to the policy there or the browser
+  will block it. Cross-site requests to `/api/*` are refused, and the two
+  API proxies only forward the paths the site actually uses.
+- **Images**: the optimizer only loads from `NEXT_PUBLIC_MEDIA_HOSTNAME` —
+  set it to your R2 media domain or images uploaded there won't display.
+  Optimized images are cached for 30 days.
+- **Caching**: pages render per request and are never cached by browsers
+  or CDNs (they contain the signed-in header). The public data inside them
+  is cached on the Next.js server for 1–5 minutes and refreshed immediately
+  after an admin save (needs `REVALIDATE_SECRET` on both sides). Free-text
+  trip searches are not cached.
+- **After pulling dependency updates**, rebuild the images
+  (`docker compose … up -d --build`) — a running container keeps the
+  packages it was built with.
 
 ## Backups
 

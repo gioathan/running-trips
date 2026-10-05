@@ -12,6 +12,7 @@ docker compose:
 """
 
 import datetime
+import inspect
 import os
 import subprocess
 import sys
@@ -40,7 +41,14 @@ os.environ.update(
         "RESEND_AUDIENCE_ID": "",
         "REVALIDATE_SECRET": "",
         "GOOGLE_OAUTH_CLIENT_ID": "",
+        # Storage: no account → nothing can reach a real bucket; fixed public
+        # URL so tests don't depend on (or read) the developer's own .env.
         "R2_ACCOUNT_ID": "",
+        "R2_ACCESS_KEY_ID": "",
+        "R2_SECRET_ACCESS_KEY": "",
+        "R2_BUCKET_NAME": "test-bucket",
+        "R2_PUBLIC_BASE_URL": "https://media.example.com",
+        "EMAIL_FROM": "Test <no-reply@example.com>",
     }
 )
 
@@ -67,7 +75,7 @@ def pytest_collection_modifyitems(items):
     # Prepended so it takes precedence over the plain marker asyncio_mode=auto adds.
     marker = pytest.mark.asyncio(loop_scope="session")
     for item in items:
-        if isinstance(item, pytest.Function):
+        if isinstance(item, pytest.Function) and inspect.iscoroutinefunction(item.function):
             item.add_marker(marker, append=False)
 
 
@@ -205,3 +213,21 @@ def use_fake_stripe(monkeypatch) -> None:
 
     monkeypatch.setattr(get_settings(), "stripe_secret_key", "sk_test_dummy")
     monkeypatch.setattr(stripe_client, "create_payment_intent", lambda *a, **k: fake_intent())
+
+
+def booking_body(trip: Trip, participants: int | list[dict] = 1, **overrides) -> dict:
+    """A valid POST /bookings payload. `participants` is a head count, or
+    the participant dicts themselves."""
+    if isinstance(participants, int):
+        participants = [
+            {"full_name": f"Runner Number{chr(65 + i)}", "date_of_birth": "1990-05-17", "gender": "female"}
+            for i in range(participants)
+        ]
+    return {
+        "trip_id": trip.id,
+        "trip_category_id": trip.categories[0].id,
+        "contact_email": "booker@example.com",
+        "contact_phone": "+306912345678",
+        "participants": participants,
+        **overrides,
+    }

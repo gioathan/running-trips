@@ -6,15 +6,10 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import release_expired_pending_bookings
 from app.modules.payments import stripe_client
 from app.modules.payments.models import Payment, PaymentStatus
-from tests.conftest import bearer, make_booking, make_trip, make_user, use_fake_stripe
+from tests.conftest import bearer, booking_body, make_booking, make_trip, make_user, use_fake_stripe
 
 
-def _booking_body(trip, participants=1):
-    return {
-        "trip_id": trip.id,
-        "trip_category_id": trip.categories[0].id,
-        "participants": [{"full_name": f"Runner {i}"} for i in range(participants)],
-    }
+_booking_body = booking_body
 
 
 async def test_booking_respects_capacity_including_held_seats(client, db):

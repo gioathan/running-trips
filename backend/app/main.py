@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
+from app.core.hardening import register_hardening
 from app.core.revalidation import register_revalidation_hook
 from app.modules.admin_auth.router import router as admin_auth_router
 from app.modules.auth.router import router as auth_router
@@ -12,6 +13,7 @@ from app.modules.content.router import router as content_router
 from app.modules.newsletter.router import router as newsletter_router
 from app.modules.payments.router import admin_router as admin_payments_router
 from app.modules.payments.router import router as payments_router
+from app.modules.payments.router import settings_router as payment_settings_router
 from app.modules.race_categories.router import router as race_categories_router
 from app.modules.trip_comments.router import router as trip_comments_router
 from app.modules.trips.router import router as trips_router
@@ -20,7 +22,10 @@ from app.modules.users.router import router as users_router
 
 settings = get_settings()
 
-app = FastAPI(title="Running Trips API", version="0.1.0")
+# Interactive docs and the OpenAPI schema are a development aid — in
+# production they'd hand any visitor a map of every endpoint, admin included.
+_docs = {} if settings.environment == "local" else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="Running Trips API", version="0.1.0", **_docs)
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +36,7 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+register_hardening(app)
 register_revalidation_hook(app)
 
 for router in (
@@ -43,6 +49,7 @@ for router in (
     bookings_router,
     payments_router,
     admin_payments_router,
+    payment_settings_router,
     content_router,
     newsletter_router,
     contact_router,

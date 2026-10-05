@@ -1,13 +1,11 @@
-import hmac
 from typing import Annotated, Literal
 
 import jwt
-from fastapi import Cookie, Depends, Header, Query, Request
+from fastapi import Cookie, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.core.exceptions import ForbiddenError, RateLimitedError, UnauthorizedError
-from app.core.redis import get_redis
+from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.core.ratelimit import client_ip, rate_limit  # noqa: F401 — re-exported for routers
 from app.core.security import decode_access_token
 from app.db.session import get_db
 
@@ -94,33 +92,3 @@ async def get_current_admin(
     if admin.role != "admin":
         raise ForbiddenError("Admin access required.")
     return admin
-
-
-def client_ip(request: Request) -> str:
-    """The end user's IP. Requests relayed by the Next.js server carry the
-    browser's IP in X-Client-IP, trusted only alongside the shared proxy
-    secret; anything else falls back to the socket peer (which, in prod, is
-    the real client — uvicorn runs with --proxy-headers behind Caddy)."""
-    secret = get_settings().proxy_shared_secret
-    forwarded_ip = request.headers.get("x-client-ip")
-    presented = request.headers.get("x-proxy-secret")
-    if secret and forwarded_ip and presented and hmac.compare_digest(presented, secret):
-        return forwarded_ip.strip()
-    return request.client.host if request.client else "unknown"
-
-
-def rate_limit(key_prefix: str, max_attempts: int, window_seconds: int):
-    """Fixed-window limiter keyed by client IP, via Redis INCR/EXPIRE.
-    Attach as a route dependency, e.g.
-    `Depends(rate_limit("login", max_attempts=10, window_seconds=60))`."""
-
-    async def _dependency(request: Request) -> None:
-        redis = get_redis()
-        key = f"ratelimit:{key_prefix}:{client_ip(request)}"
-        count = await redis.incr(key)
-        if count == 1:
-            await redis.expire(key, window_seconds)
-        if count > max_attempts:
-            raise RateLimitedError("Too many attempts. Please try again later.")
-
-    return _dependency

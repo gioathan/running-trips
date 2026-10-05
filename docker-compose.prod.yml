@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*' --no-server-header"
     # --proxy-headers/--forwarded-allow-ips: take the client IP from the
     # X-Forwarded-For header Caddy sets (Caddy replaces any client-supplied
     # value), so rate limits key on the real caller rather than Caddy's

@@ -12,7 +12,8 @@ export function UrlPagination({ page, pageSize, total }: { page: number; pageSiz
   const onPageChange = (nextPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(nextPage));
-    router.push(`${pathname}?${params.toString()}`);
+    // replace: moving through result pages shouldn't add Back-button steps
+    router.replace(`${pathname}?${params.toString()}`);
   };
 
   return <Pagination page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} />;

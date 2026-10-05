@@ -98,3 +98,8 @@ async def test_admin_cannot_use_user_endpoints_and_vice_versa(client, db):
     user = await make_user(db, email="other@example.com")
     assert (await client.get("/users/me", headers=bearer(admin))).status_code == 401
     assert (await client.get("/admin/bookings", headers=bearer(user))).status_code == 401
+
+
+async def test_weak_password_is_a_422_not_a_500(client):
+    res = await client.post("/auth/signup", json={"email": "new@example.com", "password": "weakweakweak"})
+    assert res.status_code == 422 and res.json()["code"] == "VALIDATION_ERROR"

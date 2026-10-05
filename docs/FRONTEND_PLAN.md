@@ -77,13 +77,12 @@ a component this contained.
   mark** on mobile (header is height-constrained there) — nav links (Home /
   Trips / Services / Contact), right side: locale switcher, "Log in" link +
   primary CTA button when signed out, profile avatar dropdown (My Trips /
-  Profile / Log out) when signed in. Shipped with a **text placeholder**
-  (`ΑΛΛΟΥ` / `Α`) standing in for both logo variants — the real asset files
-  were never provided during the build; swapping in `next/image` for both
-  spots in `components/layout/Header.tsx` and `Footer.tsx` once they land
-  is a two-line change, no restructuring.
-- **Footer** (dark, per your preference — see DESIGN_SYSTEM.md): **small
-  mark** (dark surface has less room than the hero-adjacent desktop header),
+  Profile / Log out) when signed in. Shipped as: the **small mark** in the header at every
+  width (per the later brief: full logo only in the 1–2 spots with room for
+  it, the mark everywhere else).
+- **Footer** (dark, per your preference — see DESIGN_SYSTEM.md): the **full
+  logo** in white — the one place on the public site with room for the
+  vertical lockup and its tagline —
   brand blurb, contact info, 3 link columns (sourced from `site_settings`,
   not hardcoded — admin-editable), newsletter signup form (no auth, dedupes
   server-side), bottom bar with copyright + legal links.
@@ -219,7 +218,7 @@ for primary actions and status highlights) but utility layout:
 | Trips | List, create, edit (EN/EL tabs incl. SEO description, categories updated in place by id), images and cover uploaded to R2 via `POST /admin/uploads/presign` (URL paste kept as a fallback), inclusions. |
 | Race Categories, Content Pages, Site Settings | Built (EN/EL editors; Content Pages edits each section type's shape from `components/site/sections/types.ts`). |
 | Bookings, Contact Messages | List + inline status change. |
-| Payments | List with status filter + full Stripe refund (`GET /admin/payments`, `POST /admin/payments/{id}/refund`). Payments that succeeded on a non-confirmed booking (flagged by the webhook) are highlighted. |
+| Payments | Payment mode setting (on-site Stripe vs. external payment link, default link, seat-hold days) — in external mode checkout ends with a "Go to payment" link instead of the Stripe form, and My Trips shows a "Complete payment" link until an admin confirms the booking. Below it: list with status filter + full Stripe refund (`GET /admin/payments`, `POST /admin/payments/{id}/refund`). Payments that succeeded on a non-confirmed booking (flagged by the webhook) are highlighted. |
 | Newsletter | List. |
 | Trip Comments | Added after the original plan: list + delete for the comments runners post after a trip. |
 
@@ -271,6 +270,13 @@ for primary actions and status highlights) but utility layout:
 ## 12. Next steps
 
 Built, and exercised end-to-end against the real backend (see
-`frontend/README.md`). Remaining, roughly in priority order: real
-Google/Stripe/R2/Resend credentials and a live payment run with
-`stripe listen`; the real logo assets.
+`frontend/README.md`). Remaining: real Google/Stripe/R2/Resend credentials and a live payment run
+with `stripe listen`.
+
+**Brand assets** (`frontend/public/brand`, `components/brand/Logo.tsx`):
+the supplied logo files were small bitmaps (400px and 63px — originals kept
+in `docs/brand/`), so both were traced to SVG, with ink and white versions.
+From the mark: `app/icon.svg`, `app/favicon.ico`, `app/apple-icon.png`,
+home-screen icons + `app/manifest.ts`, and a default link-preview image
+(`public/brand/og-default.png`). If vector originals turn up, drop them over
+the files in `public/brand` — nothing else needs to change.

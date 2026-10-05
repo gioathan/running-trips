@@ -1,7 +1,7 @@
 import datetime
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, IDMixin, TimestampMixin
@@ -19,6 +19,9 @@ class Trip(IDMixin, TimestampMixin, Base):
 
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     cover_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # Overrides the default external payment link for this trip (see
+    # payments/settings.py); unused while payments run through Stripe.
+    external_payment_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     location_city: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location_country: Mapped[str | None] = mapped_column(String(255), nullable=True)
     start_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
@@ -30,6 +33,9 @@ class Trip(IDMixin, TimestampMixin, Base):
         String(20), default=TripStatus.draft, server_default=TripStatus.draft, nullable=False, index=True
     )
 
+    # Set when an admin deletes a trip that has bookings: the row stays (the
+    # bookings point at it) but is emptied and hidden everywhere else.
+    deleted_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     translations: Mapped[list["TripTranslation"]] = relationship(
         back_populates="trip", cascade="all, delete-orphan", lazy="selectin"
     )

@@ -1,6 +1,8 @@
 import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.modules.payments.settings import validate_payment_url
 
 from app.modules.race_categories.schemas import RaceCategoryRead
 
@@ -37,6 +39,24 @@ class TripDetail(TripListItem):
     images: list[str]
 
 
+class TripDeletionPreview(BaseModel):
+    """What deleting this trip would do — shown to the admin before confirming."""
+
+    bookings_kept: int  # confirmed / cancelled / refunded: records stay, marked as a deleted trip
+    bookings_paid: int  # of those, confirmed (customers who have paid — nothing is refunded automatically)
+    bookings_to_cancel: int  # pending / awaiting payment: cancelled so nobody pays for a deleted trip
+    photos: int  # image files of this trip stored in our bucket
+
+
+class TripDeletionResult(BaseModel):
+    # "removed": no bookings, the trip is gone entirely.
+    # "hidden": it had bookings, so it was emptied and hidden and they were kept.
+    outcome: str
+    bookings_kept: int
+    bookings_cancelled: int
+    photos_deleted: int
+
+
 class TripStats(BaseModel):
     races_organized: int
     countries: int
@@ -64,6 +84,7 @@ class TripAdminRead(BaseModel):
     id: int
     slug: str
     cover_image_url: str | None
+    external_payment_url: str | None
     location_city: str | None
     location_country: str | None
     start_date: datetime.date
@@ -81,6 +102,9 @@ class TripAdminRead(BaseModel):
 class TripCreate(BaseModel):
     slug: str
     cover_image_url: str | None = None
+    external_payment_url: str | None = None
+
+    _normalize_payment_url = field_validator("external_payment_url")(validate_payment_url)
     location_city: str | None = None
     location_country: str | None = None
     start_date: datetime.date
@@ -96,6 +120,9 @@ class TripCreate(BaseModel):
 class TripUpdate(BaseModel):
     slug: str | None = None
     cover_image_url: str | None = None
+    external_payment_url: str | None = None
+
+    _normalize_payment_url = field_validator("external_payment_url")(validate_payment_url)
     location_city: str | None = None
     location_country: str | None = None
     start_date: datetime.date | None = None

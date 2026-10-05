@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationAppError
 from app.core.i18n import resolve_translation
 from app.modules.content.models import ContentSection, ContentSectionTranslation, Page, SiteSetting
 from app.modules.content.schemas import (
@@ -104,6 +104,9 @@ async def get_public_site_settings(db: AsyncSession) -> dict[str, dict]:
 
 
 async def update_site_settings(db: AsyncSession, settings: dict[str, dict]) -> dict[str, dict]:
+    if "payments" in settings:
+        # Has its own validated endpoint (PUT /admin/payment-settings).
+        raise ValidationAppError("Payment settings are changed through /admin/payment-settings.")
     for key, value in settings.items():
         setting = await db.get(SiteSetting, key)
         if setting is None:

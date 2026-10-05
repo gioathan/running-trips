@@ -26,7 +26,11 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
       else params.delete(key);
     }
     params.delete("page"); // any filter change resets pagination
-    router.push(`${pathname}?${params.toString()}`);
+    // replace, not push: filtering is an action on this page, not a new page.
+    // The browser's Back button should leave the trips page, not step back
+    // through every filter the visitor tried. (The URL still updates, so a
+    // filtered view can be shared or reloaded.)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   return (
@@ -39,7 +43,9 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
               type="button"
               onClick={() => updateParams({ status: value })}
               className={cn(
-                "rounded-full px-6 py-2 text-label-lg uppercase transition-colors",
+                // Phones: the two tabs split the full width; from sm up they
+                // hug their labels.
+                "flex-1 rounded-full px-6 py-2 text-center text-label-lg uppercase transition-colors sm:flex-none",
                 status === value ? "bg-white shadow-hard" : "text-ink-muted hover:text-ink"
               )}
             >
@@ -54,7 +60,7 @@ export function FilterBar({ categories, status, category, q }: FilterBarProps) {
           onKeyDown={(e) => {
             if (e.key === "Enter") updateParams({ q: e.currentTarget.value || undefined });
           }}
-          className="w-full max-w-[360px] rounded-full border border-ink bg-white px-5 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-ink"
+          className="w-full rounded-full border border-ink bg-white px-5 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-ink sm:max-w-[360px]"
         />
       </div>
 

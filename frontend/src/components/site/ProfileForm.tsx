@@ -13,7 +13,6 @@ import type { TravelProfile } from "@/types/api";
 interface ProfileFormValues {
   date_of_birth: string;
   nationality: string;
-  passport_number: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   shirt_size: string;
@@ -31,7 +30,6 @@ export function ProfileForm({ initial }: { initial: TravelProfile }) {
     defaultValues: {
       date_of_birth: initial.date_of_birth ?? "",
       nationality: initial.nationality ?? "",
-      passport_number: initial.passport_number ?? "",
       emergency_contact_name: initial.emergency_contact_name ?? "",
       emergency_contact_phone: initial.emergency_contact_phone ?? "",
       shirt_size: initial.shirt_size ?? "",
@@ -63,10 +61,6 @@ export function ProfileForm({ initial }: { initial: TravelProfile }) {
         <div>
           <Label htmlFor="nationality">{t("nationality")}</Label>
           <Input id="nationality" {...register("nationality")} />
-        </div>
-        <div>
-          <Label htmlFor="passport">{t("passportNumber")}</Label>
-          <Input id="passport" {...register("passport_number")} />
         </div>
         <div>
           <Label htmlFor="shirt">{t("shirtSize")}</Label>

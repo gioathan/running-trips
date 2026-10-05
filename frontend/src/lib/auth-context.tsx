@@ -9,7 +9,6 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   signup: (email: string, password: string, fullName: string, locale: string) => Promise<void>;
-  loginWithGoogle: (idToken: string, locale: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -69,19 +68,14 @@ export function AuthProvider({ initialUser, children }: { initialUser: UserPubli
     setUser(data.user);
   }, []);
 
-  const loginWithGoogle = useCallback(async (idToken: string, locale: string) => {
-    const data = await postJson<{ user: UserPublic }>("/api/auth/google", { id_token: idToken, locale });
-    setUser(data.user);
-  }, []);
-
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, login, signup, loginWithGoogle, logout, refresh }),
-    [user, isLoading, login, signup, loginWithGoogle, logout, refresh]
+    () => ({ user, isLoading, login, signup, logout, refresh }),
+    [user, isLoading, login, signup, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

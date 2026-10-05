@@ -9,7 +9,10 @@ import { ApiError } from "@/lib/api";
  * `message` isn't an enumerable own property, so it silently drops). */
 export function errorResponse(err: unknown): NextResponse {
   if (err instanceof ApiError) {
-    return NextResponse.json({ code: err.code, message: err.message, details: err.details }, { status: err.status });
+    return NextResponse.json(
+      { code: err.code, message: err.message, details: err.details },
+      { status: err.status, headers: err.retryAfter ? { "Retry-After": err.retryAfter } : undefined }
+    );
   }
   return NextResponse.json({ code: "UNKNOWN_ERROR", message: "Unexpected server error" }, { status: 500 });
 }

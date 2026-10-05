@@ -15,7 +15,7 @@ from app.core.exceptions import (
     ValidationAppError,
 )
 from app.core.redis import get_redis
-from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.bookings.models import Booking, BookingStatus, PaymentMethod
 from app.modules.payments import stripe_client
 from app.modules.payments.models import Payment, PaymentStatus
 from app.core.config import get_settings
@@ -43,6 +43,8 @@ async def create_intent(db: AsyncSession, user: User, booking_id: int) -> Create
         raise ForbiddenError("You don't have access to this booking.")
     if booking.status not in (BookingStatus.pending, BookingStatus.awaiting_payment):
         raise ConflictError(f"Booking is already {booking.status}.")
+    if booking.payment_method != PaymentMethod.stripe:
+        raise ConflictError("This booking is paid through the external payment link, not on-site.")
     if not get_settings().stripe_secret_key:
         raise ServiceNotConfiguredError("Payments are not configured (STRIPE_SECRET_KEY is unset).")
 

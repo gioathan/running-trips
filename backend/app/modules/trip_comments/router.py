@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.core.dependencies import DbSession, Locale, get_current_admin, get_current_user
+from app.core.dependencies import DbSession, Locale, get_current_admin, get_current_user, rate_limit
 from app.core.pagination import Page, PageParams, page_params
 from app.modules.audit import service as audit_service
 from app.modules.trip_comments import service
@@ -21,7 +21,11 @@ async def list_pending_trip_comments(db: DbSession, locale: Locale, current_user
     return await service.list_pending_comment_trips(db, current_user, locale)
 
 
-@router.post("/trip-comments", response_model=TripCommentRead)
+@router.post(
+    "/trip-comments",
+    response_model=TripCommentRead,
+    dependencies=[Depends(rate_limit("trip-comments", max_attempts=10, window_seconds=600))],
+)
 async def create_trip_comment(body: TripCommentCreate, db: DbSession, current_user: User = Depends(get_current_user)):
     return await service.create_comment(db, current_user, body)
 

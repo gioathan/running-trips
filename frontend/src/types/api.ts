@@ -115,6 +115,7 @@ export interface TripAdmin {
   id: number;
   slug: string;
   cover_image_url: string | null;
+  external_payment_url: string | null;
   location_city: string | null;
   location_country: string | null;
   start_date: string;
@@ -133,13 +134,27 @@ export interface TripAdmin {
 
 export type BookingStatus = "pending" | "awaiting_payment" | "confirmed" | "cancelled" | "refunded";
 
+export type Gender = "male" | "female" | "other";
+export type ShirtSize = "XS" | "S" | "M" | "L" | "XL" | "XXL";
+
+/** A participant as POST /bookings takes it. */
 export interface ParticipantIn {
+  /** Latin characters, first name + surname (goes on race bibs / rooming lists). */
   full_name: string;
-  date_of_birth?: string | null;
-  nationality?: string | null;
-  passport_number?: string | null;
-  shirt_size?: string | null;
-  extra?: Record<string, unknown>;
+  date_of_birth: string;
+  gender: Gender;
+  nationality: string | null;
+  shirt_size: ShirtSize | null;
+}
+
+/** As returned — nullable where bookings older than these fields lack them. */
+export interface ParticipantRead {
+  id: number;
+  full_name: string;
+  date_of_birth: string | null;
+  gender: Gender | null;
+  nationality: string | null;
+  shirt_size: string | null;
 }
 
 export interface BookingTripSummary {
@@ -149,21 +164,56 @@ export interface BookingTripSummary {
   cover_image_url: string | null;
   start_date: string;
   end_date: string;
+  /** The trip was deleted by an admin: the booking remains, but there is no trip page to link to. */
+  deleted: boolean;
 }
+
+/** What deleting a trip would do — shown to the admin before confirming. */
+export interface TripDeletionPreview {
+  bookings_kept: number;
+  bookings_paid: number;
+  bookings_to_cancel: number;
+  photos: number;
+}
+
+export interface TripDeletionResult {
+  outcome: "removed" | "hidden";
+  bookings_kept: number;
+  bookings_cancelled: number;
+  photos_deleted: number;
+}
+
+export type PaymentMethod = "stripe" | "external";
 
 export interface Booking {
   id: number;
   trip: BookingTripSummary;
   status: BookingStatus;
+  payment_method: PaymentMethod;
+  /** Only while an external-payment booking is unpaid: where to pay, and when the seat hold lapses. */
+  payment_url: string | null;
+  payment_due_at: string | null;
   participant_count: number;
   total_amount_cents: number;
-  participants: (ParticipantIn & { id: number })[];
+  /** The booking's own contact details (may differ from the account's email). */
+  contact_email: string | null;
+  contact_phone: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  participants: ParticipantRead[];
   created_at: string;
 }
 
 export interface BookingAdmin extends Booking {
   user_id: number;
   user_email: string;
+}
+
+/** Admin-configured payment mode (backend payments/settings.py). */
+export interface PaymentSettings {
+  mode: PaymentMethod;
+  external_url: string | null;
+  external_hold_days: number;
 }
 
 export type PaymentStatus = "requires_payment" | "succeeded" | "failed" | "refunded";

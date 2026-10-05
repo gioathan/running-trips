@@ -6,7 +6,15 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import AdminAccountError, EmailAlreadyRegisteredError, InvalidCredentialsError, UnauthorizedError
+from app.core.exceptions import (
+    AdminAccountError,
+    EmailAlreadyRegisteredError,
+    GoogleAccountNotRegisteredError,
+    InvalidCredentialsError,
+    UnauthorizedError,
+    UseGoogleSignInError,
+    UsePasswordSignInError,
+)
 from app.core.security import (
     create_access_token,
     create_purpose_token,
@@ -31,7 +39,10 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
 
 
 async def signup(db: AsyncSession, email: str, password: str, full_name: str | None, locale: str) -> User:
-    if await get_user_by_email(db, email):
+    existing = await get_user_by_email(db, email)
+    if existing is not None:
+        if existing.password_hash is None:
+            raise UseGoogleSignInError("This email is already registered with Google sign-in.")
         raise EmailAlreadyRegisteredError("An account with this email already exists.")
     user = User(
         email=email.lower(),
@@ -48,7 +59,10 @@ async def signup(db: AsyncSession, email: str, password: str, full_name: str | N
 
 async def authenticate(db: AsyncSession, email: str, password: str) -> User:
     user = await get_user_by_email(db, email)
-    if user is None or user.password_hash is None or not verify_password(password, user.password_hash):
+    if user is not None and user.password_hash is None:
+        # Created through Google — there is no password to check.
+        raise UseGoogleSignInError("This account uses Google sign-in.")
+    if user is None or not verify_password(password, user.password_hash):
         raise InvalidCredentialsError("Incorrect email or password.")
     if not user.is_active:
         raise InvalidCredentialsError("Account is disabled.")
@@ -65,7 +79,7 @@ def _reject_admin(user: User) -> None:
         raise AdminAccountError("Admin accounts sign in at /admin/login.")
 
 
-async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, locale: str) -> User:
+async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, locale: str, intent: str = "login") -> User:
     if not settings.google_oauth_client_id:
         raise UnauthorizedError("Google sign-in is not configured.")
     try:
@@ -92,20 +106,26 @@ async def login_or_signup_with_google(db: AsyncSession, raw_id_token: str, local
     user = await get_user_by_email(db, email) if email else None
     if user is not None:
         _reject_admin(user)
-    if user is not None and not claims.get("email_verified"):
-        # Linking to an existing account by an email Google hasn't verified
-        # would let someone who merely *claims* that address take it over.
-        raise EmailAlreadyRegisteredError("An account with this email already exists.")
-    if user is None:
-        user = User(
-            email=email.lower() if email else f"google-{google_sub}@no-email.invalid",
-            full_name=claims.get("name"),
-            locale=locale if locale in ("en", "el") else "en",
-            role=UserRole.user,
-            email_verified=bool(claims.get("email_verified")),
-        )
-        db.add(user)
-        await db.flush()
+        # The email belongs to an account that isn't linked to this Google
+        # identity — i.e. one registered with a password. It is not linked
+        # automatically: the owner signs in the way they registered.
+        raise UsePasswordSignInError("This email is registered with a password.")
+
+    if intent != "signup":
+        # Pressed "log in", but this Google account has never signed up.
+        # Creating an account here would surprise people — they asked to
+        # get into an existing one.
+        raise GoogleAccountNotRegisteredError("No account exists for this Google account yet.")
+
+    user = User(
+        email=email.lower() if email else f"google-{google_sub}@no-email.invalid",
+        full_name=claims.get("name"),
+        locale=locale if locale in ("en", "el") else "en",
+        role=UserRole.user,
+        email_verified=bool(claims.get("email_verified")),
+    )
+    db.add(user)
+    await db.flush()
 
     db.add(
         OAuthAccount(
@@ -213,7 +233,9 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Use
     except Exception as exc:
         raise UnauthorizedError("Invalid or expired reset link.") from exc
     user = await db.get(User, int(payload["sub"]))
-    if user is None or payload.get("pwf") != _password_fingerprint(user):
+    # A Google-only account has no password to reset — setting one here
+    # would quietly give it a second sign-in method.
+    if user is None or user.password_hash is None or payload.get("pwf") != _password_fingerprint(user):
         raise UnauthorizedError("Invalid or expired reset link.")
     user.password_hash = hash_password(new_password)
     # Whoever triggered a reset may be locking out an attacker — end every

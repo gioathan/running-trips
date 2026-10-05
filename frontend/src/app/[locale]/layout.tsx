@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { Inter } from "next/font/google";
@@ -23,9 +23,17 @@ export async function generateMetadata({ params: { locale } }: { params: { local
     metadataBase: new URL(SITE_URL),
     title: { default: t("defaultTitle"), template: `%s — ${t("siteName")}` },
     description: t("defaultDescription"),
-    openGraph: { siteName: t("siteName"), locale: locale === "el" ? "el_GR" : "en_US", type: "website" },
+    openGraph: {
+      siteName: t("siteName"),
+      locale: locale === "el" ? "el_GR" : "en_US",
+      type: "website",
+      // Default link preview; trip pages override it with their cover image.
+      images: [{ url: "/brand/og-default.png", width: 1200, height: 630, alt: t("defaultTitle") }],
+    },
   };
 }
+
+export const viewport: Viewport = { themeColor: "#E6E6E6" };
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -47,7 +55,11 @@ export default async function LocaleLayout({
     backendFetch<Page<TripListItem>>(`/trips${qs({ status: "upcoming", page_size: 12, locale })}`, {
       next: { revalidate: 300 },
     }).catch(() => null),
-    backendFetch<SiteSettings>("/site-settings/public", { cache: "no-store" }).catch((): SiteSettings => ({})),
+    // Cached like the rest of the public content (it used to be fetched on
+    // every page view); admin saves revalidate it immediately.
+    backendFetch<SiteSettings>("/site-settings/public", { next: { revalidate: 300 } }).catch(
+      (): SiteSettings => ({})
+    ),
   ]);
 
   // Ticker items: real race name + city from upcoming trips, falling back to

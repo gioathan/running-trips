@@ -9,6 +9,7 @@ from app.workers.tasks import (
     sync_newsletter_contact,
     send_booking_confirmation_email,
     send_contact_acknowledgment_email,
+    send_external_payment_instructions_email,
     send_password_reset_email,
     send_verification_email,
 )
@@ -23,6 +24,7 @@ class WorkerSettings:
         send_password_reset_email,
         send_booking_confirmation_email,
         send_contact_acknowledgment_email,
+        send_external_payment_instructions_email,
         revalidate_frontend,
         send_newsletter_welcome_email,
         sync_newsletter_contact,

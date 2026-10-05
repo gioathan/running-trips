@@ -21,7 +21,11 @@ async def subscribe(body: SubscribeRequest, db: DbSession):
         await enqueue_email("send_newsletter_welcome_email", email=email, locale=body.locale)
 
 
-@router.post("/newsletter/unsubscribe", status_code=204)
+@router.post(
+    "/newsletter/unsubscribe",
+    status_code=204,
+    dependencies=[Depends(rate_limit("newsletter-unsubscribe", max_attempts=20, window_seconds=600))],
+)
 async def unsubscribe(body: UnsubscribeRequest, db: DbSession):
     email = await service.unsubscribe(db, body.token)
     if email:

@@ -1,19 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Input, Label, FieldError } from "@/components/ui/Input";
+import { FieldError } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Feedback";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getStripe } from "@/lib/stripe";
 import { errorMessageKey } from "@/lib/error-messages";
 import { useAuth } from "@/lib/auth-context";
-import type { CreateIntentResponse, Booking, TravelProfile } from "@/types/api";
+import { E164_PATTERN } from "@/lib/phone";
+import {
+  BookingDetailsForm,
+  emptyBookingDetails,
+  type BookingDetails,
+  type BookingDetailsValues,
+} from "./BookingDetailsForm";
+import type { CreateIntentResponse, Booking, Gender, ShirtSize, TravelProfile, UserPublic } from "@/types/api";
+
+const SHIRT_SIZES: ShirtSize[] = ["XS", "S", "M", "L", "XL", "XXL"];
 
 interface CheckoutModalProps {
   open: boolean;
@@ -22,60 +30,6 @@ interface CheckoutModalProps {
   tripCategoryId: number;
   participantCount: number;
   pricePerPerson: number;
-}
-
-interface ParticipantForm {
-  full_name: string;
-  nationality?: string;
-  shirt_size?: string;
-}
-
-function ParticipantsStep({
-  participantCount,
-  prefill,
-  onSubmit,
-}: {
-  participantCount: number;
-  /** Participant 1's starting values — the signed-in user's own details. */
-  prefill: ParticipantForm;
-  onSubmit: (participants: ParticipantForm[]) => void;
-}) {
-  const t = useTranslations("checkout");
-  const { control, register, handleSubmit } = useForm<{ participants: ParticipantForm[] }>({
-    defaultValues: {
-      participants: Array.from({ length: participantCount }, (_, i) => (i === 0 ? prefill : { full_name: "" })),
-    },
-  });
-  const { fields } = useFieldArray({ control, name: "participants" });
-
-  return (
-    <form onSubmit={handleSubmit((values) => onSubmit(values.participants))} className="space-y-6">
-      {fields.map((field, index) => (
-        <div key={field.id} className="space-y-3 border-b border-ink/10 pb-6 last:border-0">
-          <p className="text-label-md uppercase text-ink-muted">
-            {t("participant")} {index + 1}
-          </p>
-          <div>
-            <Label htmlFor={`full_name_${index}`}>{t("fullName")}</Label>
-            <Input id={`full_name_${index}`} required {...register(`participants.${index}.full_name` as const, { required: true })} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor={`nationality_${index}`}>{t("nationality")}</Label>
-              <Input id={`nationality_${index}`} {...register(`participants.${index}.nationality` as const)} />
-            </div>
-            <div>
-              <Label htmlFor={`shirt_${index}`}>{t("shirtSize")}</Label>
-              <Input id={`shirt_${index}`} placeholder="M" {...register(`participants.${index}.shirt_size` as const)} />
-            </div>
-          </div>
-        </div>
-      ))}
-      <Button type="submit" variant="primary" className="w-full">
-        {t("continueToPayment")}
-      </Button>
-    </form>
-  );
 }
 
 function PaymentStep({ clientSecret, bookingId, onSuccess }: { clientSecret: string; bookingId: number; onSuccess: () => void }) {
@@ -118,33 +72,63 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
   const t = useTranslations("checkout");
   const tErr = useTranslations("errors");
   const router = useRouter();
-  const [step, setStep] = useState<"participants" | "payment" | "success">("participants");
+  const [step, setStep] = useState<"participants" | "payment" | "external" | "success">("participants");
+  // Set when the site is in external-payment mode: the booking is recorded
+  // and the customer pays through this link instead of Stripe.
+  const [externalBooking, setExternalBooking] = useState<Booking | null>(null);
   const [intent, setIntent] = useState<CreateIntentResponse | null>(null);
   const [bookingId, setBookingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
-  // Participant 1 is usually the person booking: start from their name and
-  // saved travel profile instead of a blank form. null = still loading.
-  const [prefill, setPrefill] = useState<ParticipantForm | null>(null);
+  const locale = useLocale();
+  // The booker is usually participant 1: start from their account and saved
+  // travel profile instead of a blank form. null = still loading.
+  const [prefill, setPrefill] = useState<BookingDetailsValues | null>(null);
 
   useEffect(() => {
     if (!open || prefill) return;
-    const base: ParticipantForm = { full_name: user?.full_name ?? "" };
-    apiFetch<TravelProfile>("/users/me/travel-profile")
-      .then((profile) =>
-        setPrefill({ ...base, nationality: profile.nationality ?? "", shirt_size: profile.shirt_size ?? "" })
-      )
-      .catch(() => setPrefill(base)); // not essential — fall back to just the name
+    const base = emptyBookingDetails();
+    base.contact_email = user?.email ?? "";
+    base.participants[0].full_name = user?.full_name ?? "";
+
+    // Neither lookup is essential — whatever fails just isn't prefilled.
+    Promise.all([
+      apiFetch<UserPublic & { phone: string | null }>("/users/me").catch(() => null),
+      apiFetch<TravelProfile>("/users/me/travel-profile").catch(() => null),
+    ]).then(([account, profile]) => {
+      const validPhone = (value: string | null | undefined) => (value && E164_PATTERN.test(value) ? value : "");
+      const shirt = (profile?.shirt_size ?? "").toUpperCase();
+      setPrefill({
+        ...base,
+        contact_phone: validPhone(account?.phone),
+        emergency_contact_name: profile?.emergency_contact_name ?? "",
+        emergency_contact_phone: validPhone(profile?.emergency_contact_phone),
+        participants: [
+          {
+            ...base.participants[0],
+            date_of_birth: profile?.date_of_birth ?? "",
+            gender: "" as Gender | "",
+            nationality: profile?.nationality ?? "",
+            shirt_size: (SHIRT_SIZES.includes(shirt as ShirtSize) ? shirt : "") as ShirtSize | "",
+          },
+        ],
+      });
+    });
   }, [open, prefill, user]);
 
-  const handleParticipants = async (participants: ParticipantForm[]) => {
+  const handleDetails = async (details: BookingDetails) => {
     setError(null);
     try {
       const booking = await apiFetch<Booking>("/bookings", {
         method: "POST",
-        body: JSON.stringify({ trip_id: tripId, trip_category_id: tripCategoryId, participants }),
+        body: JSON.stringify({ trip_id: tripId, trip_category_id: tripCategoryId, ...details }),
       });
       setBookingId(booking.id);
+      if (booking.payment_method === "external") {
+        setExternalBooking(booking);
+        setStep("external");
+        return;
+      }
       const createdIntent = await apiFetch<CreateIntentResponse>("/payments/create-intent", {
         method: "POST",
         body: JSON.stringify({ booking_id: booking.id }),
@@ -154,6 +138,13 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
     } catch (err) {
       setError(err instanceof ApiError ? tErr(errorMessageKey(err.code)) : tErr("generic"));
     }
+  };
+
+  // The booking is already saved either way — My Trips shows it with its
+  // payment link.
+  const goToAccount = () => {
+    onOpenChange(false);
+    router.push("/account");
   };
 
   const handleSuccess = () => {
@@ -172,7 +163,7 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
       {error && <FieldError>{error}</FieldError>}
       {step === "participants" &&
         (prefill ? (
-          <ParticipantsStep participantCount={participantCount} prefill={prefill} onSubmit={handleParticipants} />
+          <BookingDetailsForm participantCount={participantCount} prefill={prefill} onSubmit={handleDetails} />
         ) : (
           <div className="flex justify-center py-10">
             <Spinner />
@@ -182,6 +173,34 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
         <Elements stripe={getStripe()} options={{ clientSecret: intent.client_secret }}>
           <PaymentStep clientSecret={intent.client_secret} bookingId={bookingId} onSuccess={handleSuccess} />
         </Elements>
+      )}
+      {step === "external" && externalBooking?.payment_url && (
+        <div className="space-y-6">
+          <div>
+            <p className="text-headline-sm">{t("externalHeadline")}</p>
+            <p className="mt-2 text-body-md text-ink-muted">
+              {t("externalBody", {
+                id: externalBooking.id,
+                due: externalBooking.payment_due_at
+                  ? new Date(externalBooking.payment_due_at).toLocaleDateString(locale, { dateStyle: "long" })
+                  : "",
+              })}
+            </p>
+          </div>
+          {/* A real link (not window.open after an await) so popup blockers don't swallow it. */}
+          <a
+            href={externalBooking.payment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={goToAccount}
+            className="flex h-12 w-full items-center justify-center rounded-full bg-primary px-8 text-label-lg uppercase text-ink transition-shadow hover:shadow-hard"
+          >
+            {t("externalCta")}
+          </a>
+          <Button type="button" variant="ghost" className="w-full" onClick={goToAccount}>
+            {t("externalLater")}
+          </Button>
+        </div>
       )}
       {step === "success" && <p className="text-body-lg">{t("success")}</p>}
     </Modal>

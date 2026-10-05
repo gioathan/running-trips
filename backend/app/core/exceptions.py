@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -28,7 +29,7 @@ class ConflictError(AppError):
 
 
 class ValidationAppError(AppError):
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = 422
     code = "VALIDATION_ERROR"
 
 
@@ -45,6 +46,11 @@ class ForbiddenError(AppError):
 class RateLimitedError(AppError):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     code = "RATE_LIMITED"
+
+    def __init__(self, message: str = "", retry_after: int | None = None):
+        super().__init__(message)
+        # Seconds until the window resets — sent as a Retry-After header.
+        self.headers = {"Retry-After": str(retry_after)} if retry_after else {}
 
 
 class ServiceNotConfiguredError(AppError):
@@ -75,6 +81,24 @@ class EmailAlreadyRegisteredError(ConflictError):
     code = "EMAIL_ALREADY_REGISTERED"
 
 
+# One sign-in method per account: an account made with a password signs in
+# with that password, one made with Google signs in with Google. Trying the
+# other way is refused with a code that tells the person which to use.
+class UseGoogleSignInError(ConflictError):
+    code = "USE_GOOGLE_SIGN_IN"
+
+
+class UsePasswordSignInError(ConflictError):
+    code = "USE_PASSWORD_SIGN_IN"
+
+
+class GoogleAccountNotRegisteredError(NotFoundError):
+    """Google sign-in from the *log in* form for a Google account that has
+    never signed up here."""
+
+    code = "GOOGLE_ACCOUNT_NOT_REGISTERED"
+
+
 def _error_response(status_code: int, code: str, message: str, details: dict) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -85,13 +109,17 @@ def _error_response(status_code: int, code: str, message: str, details: dict) ->
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
-        return _error_response(exc.status_code, exc.code, exc.message, exc.details)
+        response = _error_response(exc.status_code, exc.code, exc.message, exc.details)
+        response.headers.update(getattr(exc, "headers", {}))
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         return _error_response(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            422,
             "VALIDATION_ERROR",
             "Request validation failed.",
-            {"errors": exc.errors()},
+            # jsonable_encoder: errors raised by custom validators carry the
+            # original exception object in `ctx`, which plain JSON can't encode.
+            {"errors": jsonable_encoder(exc.errors())},
         )

@@ -104,6 +104,25 @@ diff for this — safe to accept or ignore.
 | `PROXY_SHARED_SECRET` | Must match the frontend's `BACKEND_PROXY_SECRET`. Lets the backend trust the end-user IP the Next.js server forwards in `X-Client-IP`, so per-IP rate limits key on the real user rather than the frontend server. |
 | `REVALIDATE_SECRET` | Must match the frontend's. Admin writes to trips, race categories, content pages, site settings or trip comments then trigger on-demand ISR revalidation (`app/core/revalidation.py`, coalesced into one worker job per burst of edits). |
 
+## Payment mode (admin setting)
+
+`GET/PUT /admin/payment-settings` (stored in `site_settings['payments']`,
+edited on the admin Payments page) switches how **new** bookings are paid:
+
+- `stripe` (default): on-site card payment, confirmed by the webhook.
+- `external`: the booking is saved as `awaiting_payment` with
+  `payment_method = external`, and the customer is sent to a payment link —
+  the trip's own `external_payment_url` if set, else the default link from
+  the settings (`{booking_id}` in the link is replaced with the booking
+  reference). An admin confirms it on the Bookings page once the payment is
+  reported, which sends the confirmation email. Unpaid external bookings
+  hold their seats for `external_hold_days` (default 3), then the worker
+  cancels them. They are never sent to Stripe, and are refunded by setting
+  the status by hand.
+
+Each booking keeps the method it was created with, so switching modes
+doesn't affect existing bookings.
+
 ## What's implemented
 
 Fully implemented end-to-end: auth (signup/login/refresh/logout/Google/
@@ -116,6 +135,23 @@ contact messages, R2 presigned uploads, audit log.
 
 Every admin write endpoint records an `audit_log` row — keep calling
 `audit_service.record(...)` from new ones.
+
+Booking details: `POST /bookings` requires a contact email and an E.164
+mobile number for the booking (stored on the booking — they may differ from
+the account's, and booking emails go to that address), and for each
+participant a Latin-character full name, date of birth and gender;
+nationality, shirt size (XS–XXL) and an emergency contact are optional.
+Bookings created before these fields existed simply lack them.
+
+Deleting a trip (`DELETE /admin/trips/{id}`, any trip, past or upcoming;
+`GET …/deletion-preview` says what it will do): its photos are removed from
+the bucket — only files under `R2_PUBLIC_BASE_URL`, and only those no other
+trip or CMS page still uses — and booking/payment records are never deleted
+with it. A trip without bookings is removed outright. A trip with bookings is
+emptied and hidden instead (`trips.deleted_at`, slug released): unpaid
+bookings are cancelled, paid ones are kept untouched and shown as belonging
+to a deleted trip. Nothing is refunded automatically. Removing a single
+photo or replacing the cover deletes that file from the bucket too.
 
 Booking lifecycle details worth knowing:
 - Capacity counts *active* bookings (`pending`, `awaiting_payment`,

@@ -1,12 +1,17 @@
-from sqlalchemy import func, select
+import asyncio
+import datetime
+
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.i18n import resolve_translation
 from app.core.pagination import Page, PageParams, paginate
-from app.modules.bookings.models import Booking
+from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.content.models import ContentSectionTranslation, SiteSetting
 from app.modules.race_categories.schemas import RaceCategoryRead
 from app.modules.trips import repository
+from app.modules.uploads import service as uploads_service
 from app.modules.trips.models import Trip, TripCategory, TripImage, TripInclusion, TripInclusionTranslation, TripStatus, TripTranslation
 from app.modules.trips.schemas import (
     TranslationIn,
@@ -14,6 +19,8 @@ from app.modules.trips.schemas import (
     TripCategoryIn,
     TripCategoryRead,
     TripCreate,
+    TripDeletionPreview,
+    TripDeletionResult,
     TripDetail,
     TripImageIn,
     TripInclusionIn,
@@ -151,6 +158,7 @@ def _to_admin_read(trip: Trip) -> TripAdminRead:
         id=trip.id,
         slug=trip.slug,
         cover_image_url=trip.cover_image_url,
+        external_payment_url=trip.external_payment_url,
         location_city=trip.location_city,
         location_country=trip.location_country,
         start_date=trip.start_date,
@@ -202,7 +210,7 @@ async def get_trip_admin(db: AsyncSession, trip_id: int) -> TripAdminRead:
 
 async def _get_trip_or_404(db: AsyncSession, trip_id: int) -> Trip:
     trip = await db.get(Trip, trip_id)
-    if trip is None:
+    if trip is None or trip.deleted_at is not None:
         raise NotFoundError("Trip not found.")
     return trip
 
@@ -215,6 +223,7 @@ async def create_trip(db: AsyncSession, body: TripCreate) -> TripAdminRead:
     trip = Trip(
         slug=body.slug,
         cover_image_url=body.cover_image_url,
+        external_payment_url=body.external_payment_url,
         location_city=body.location_city,
         location_country=body.location_country,
         start_date=body.start_date,
@@ -234,6 +243,7 @@ async def create_trip(db: AsyncSession, body: TripCreate) -> TripAdminRead:
 
 async def update_trip(db: AsyncSession, trip_id: int, body: TripUpdate) -> TripAdminRead:
     trip = await _get_trip_or_404(db, trip_id)
+    previous_cover = trip.cover_image_url
     patch = body.model_dump(exclude_unset=True, exclude={"translations", "categories"})
     for field, value in patch.items():
         setattr(trip, field, TripStatus(value) if field == "status" else value)
@@ -256,6 +266,8 @@ async def update_trip(db: AsyncSession, trip_id: int, body: TripUpdate) -> TripA
 
     await db.commit()
     await db.refresh(trip)
+    if previous_cover and previous_cover != trip.cover_image_url:
+        await _delete_unused_media(db, [previous_cover])
     return _to_admin_read(trip)
 
 
@@ -291,12 +303,100 @@ async def _has_bookings(db: AsyncSession, condition) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def delete_trip(db: AsyncSession, trip_id: int) -> None:
+def _media_urls(trip: Trip) -> list[str]:
+    return [u for u in [trip.cover_image_url, *(img.url for img in trip.images)] if u]
+
+
+async def _delete_unused_media(db: AsyncSession, urls: list[str]) -> int:
+    """Delete from the bucket whichever of these files nothing references
+    any more. Call after the change that dropped the references has been
+    committed. A file can be shared (the same URL pasted on another trip,
+    or into a CMS page), so each one is checked before it is removed."""
+    candidates = sorted({u for u in urls if uploads_service.object_key_for(u)})
+    if not candidates:
+        return 0
+    in_use: set[str] = set()
+    in_use.update((await db.execute(select(Trip.cover_image_url).where(Trip.cover_image_url.in_(candidates)))).scalars())
+    in_use.update((await db.execute(select(TripImage.url).where(TripImage.url.in_(candidates)))).scalars())
+    for url in candidates:
+        if url in in_use:
+            continue
+        # CMS sections and site settings hold free-form JSON — search its text.
+        needle = f"%{url}%"
+        referenced = (
+            await db.execute(
+                select(
+                    select(ContentSectionTranslation.id).where(cast(ContentSectionTranslation.data, Text).like(needle)).exists()
+                    | select(SiteSetting.key).where(cast(SiteSetting.value, Text).like(needle)).exists()
+                )
+            )
+        ).scalar_one()
+        if referenced:
+            in_use.add(url)
+    unused = [u for u in candidates if u not in in_use]
+    return await asyncio.to_thread(uploads_service.delete_objects, unused)
+
+
+async def _booking_counts(db: AsyncSession, trip_id: int) -> dict[str, int]:
+    rows = (
+        await db.execute(select(Booking.status, func.count(Booking.id)).where(Booking.trip_id == trip_id).group_by(Booking.status))
+    ).all()
+    return {status: count for status, count in rows}
+
+
+UNPAID_STATUSES = (BookingStatus.pending, BookingStatus.awaiting_payment)
+
+
+async def deletion_preview(db: AsyncSession, trip_id: int) -> TripDeletionPreview:
     trip = await _get_trip_or_404(db, trip_id)
-    if await _has_bookings(db, Booking.trip_id == trip.id):
-        raise ConflictError("This trip has bookings and can't be deleted — archive it instead.")
-    await db.delete(trip)
-    await db.commit()
+    counts = await _booking_counts(db, trip.id)
+    unpaid = sum(counts.get(s, 0) for s in UNPAID_STATUSES)
+    return TripDeletionPreview(
+        bookings_kept=sum(counts.values()) - unpaid,
+        bookings_paid=counts.get(BookingStatus.confirmed, 0),
+        bookings_to_cancel=unpaid,
+        photos=len({u for u in _media_urls(trip) if uploads_service.object_key_for(u)}),
+    )
+
+
+async def delete_trip(db: AsyncSession, trip_id: int) -> TripDeletionResult:
+    """Delete a trip — past or upcoming — and remove its photos from the
+    bucket. Booking and payment records are never deleted with it:
+
+    - No bookings: the trip row and everything under it is removed.
+    - Has bookings: unpaid ones are cancelled, the rest are kept, and the
+      trip is emptied and hidden (`deleted_at`) so they still have something
+      to point at. Its slug is released for reuse.
+    """
+    # Deferred: bookings.service imports this module's models at load time.
+    from app.modules.bookings.service import cancel_unpaid_bookings_for_trip
+
+    trip = await _get_trip_or_404(db, trip_id)
+    media = _media_urls(trip)
+
+    if not await _has_bookings(db, Booking.trip_id == trip.id):
+        await db.delete(trip)
+        await db.commit()
+        outcome, kept, cancelled = "removed", 0, 0
+    else:
+        cancelled = await cancel_unpaid_bookings_for_trip(db, trip.id)
+        trip.deleted_at = datetime.datetime.now(datetime.UTC)
+        trip.status = TripStatus.archived  # every public query filters on `published`
+        trip.is_featured = False
+        trip.slug = f"deleted-{trip.id}-{trip.slug}"[:255]  # slug is unique — free the original
+        trip.cover_image_url = None
+        trip.images.clear()
+        trip.inclusions.clear()
+        await db.commit()
+        outcome = "hidden"
+        kept = sum((await _booking_counts(db, trip.id)).values())
+
+    return TripDeletionResult(
+        outcome=outcome,
+        bookings_kept=kept,
+        bookings_cancelled=cancelled,
+        photos_deleted=await _delete_unused_media(db, media),
+    )
 
 
 async def add_image(db: AsyncSession, trip_id: int, body: TripImageIn) -> dict:
@@ -312,8 +412,10 @@ async def delete_image(db: AsyncSession, trip_id: int, image_id: int) -> None:
     image = await db.get(TripImage, image_id)
     if image is None or image.trip_id != trip_id:
         raise NotFoundError("Trip image not found.")
+    url = image.url
     await db.delete(image)
     await db.commit()
+    await _delete_unused_media(db, [url])  # the file too, unless something else still shows it
 
 
 async def add_inclusion(db: AsyncSession, trip_id: int, body: TripInclusionIn) -> dict:
@@ -362,6 +464,6 @@ async def delete_inclusion(db: AsyncSession, trip_id: int, inclusion_id: int) ->
 
 
 async def list_trips_admin(db: AsyncSession, params: PageParams) -> Page[TripAdminRead]:
-    stmt = select(Trip).order_by(Trip.start_date.desc())
+    stmt = select(Trip).where(Trip.deleted_at.is_(None)).order_by(Trip.start_date.desc())
     trips, total = await paginate(db, stmt, params)
     return Page(items=[_to_admin_read(t) for t in trips], total=total, page=params.page, page_size=params.page_size)

@@ -1,3 +1,16 @@
 {$API_DOMAIN} {
+	# Largest legitimate request is a CMS page save (tens of KB); uploads go
+	# straight to object storage. The API enforces the same cap for requests
+	# that declare a length — this also covers chunked bodies.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		# Browsers must only ever reach the API over HTTPS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
 	reverse_proxy api:8000
 }

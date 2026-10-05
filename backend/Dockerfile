@@ -18,4 +18,10 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then pip install -r requirements-dev.txt; el
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run as an unprivileged user: a bug in the app or a dependency shouldn't
+# hand out root inside the container. uid 1000 matches the usual host user,
+# so the dev compose file's source bind-mount stays readable and writable.
+RUN useradd --uid 1000 --create-home app && chown -R app:app /app
+USER app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]

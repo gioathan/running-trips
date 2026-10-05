@@ -1,3 +1,4 @@
+import sanitizeHtml from "sanitize-html";
 import type { ContentSection } from "@/types/api";
 import { Hero } from "./sections/Hero";
 import { WidgetList } from "./sections/WidgetList";
@@ -74,8 +75,16 @@ export function Section({ section }: { section: ContentSection }) {
       return <CtaBanner data={section.data as unknown as CtaBannerData} />;
     case "richtext": {
       const data = section.data as unknown as RichtextData;
-      // eslint-disable-next-line react/no-danger -- admin-authored content, not user input
-      return <section className="prose max-w-none py-10" dangerouslySetInnerHTML={{ __html: data.html }} />;
+      // Admin-authored, but sanitized anyway: if an admin account is ever
+      // compromised, this field shouldn't be a way to plant scripts on the
+      // public site. Allows formatting, links and images; strips the rest.
+      const html = sanitizeHtml(data.html ?? "", {
+        allowedTags: [...sanitizeHtml.defaults.allowedTags, "img", "h1", "h2"],
+        allowedAttributes: { a: ["href", "target", "rel"], img: ["src", "alt", "width", "height"] },
+        allowedSchemes: ["http", "https", "mailto", "tel"],
+      });
+      // eslint-disable-next-line react/no-danger -- sanitized above
+      return <section className="prose max-w-none py-10" dangerouslySetInnerHTML={{ __html: html }} />;
     }
     default:
       return null;

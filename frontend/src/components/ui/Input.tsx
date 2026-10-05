@@ -1,4 +1,10 @@
-import { forwardRef, type InputHTMLAttributes, type LabelHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import {
+  forwardRef,
+  type InputHTMLAttributes,
+  type LabelHTMLAttributes,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
 import { cn } from "@/lib/cn";
 
 const fieldClasses =
@@ -13,6 +19,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   ({ className, ...props }, ref) => <textarea ref={ref} className={cn(fieldClasses, "min-h-[100px]", className)} {...props} />
 );
 Textarea.displayName = "Textarea";
+
+/** Plain <select> styled like Input — for forms driven by react-hook-form's
+ * `register` (the Radix-based ui/Select needs a Controller instead). */
+export const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
+  ({ className, ...props }, ref) => <select ref={ref} className={cn(fieldClasses, className)} {...props} />
+);
+NativeSelect.displayName = "NativeSelect";
 
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return <label className={cn("mb-1 block text-label-md uppercase text-ink-muted", className)} {...props} />;

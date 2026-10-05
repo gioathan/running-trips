@@ -33,24 +33,22 @@ async function getComments(slug: string): Promise<Page<TripCommentPublic> | null
 
 const RELATED_SHOWN = 3;
 
-/** Upcoming trips sharing this trip's primary race category, topped up with
- * other upcoming trips if there aren't enough (FRONTEND_PLAN.md §7). */
+/** The "More trips" row: upcoming trips that can still be booked (not full),
+ * minus this one. Featured trips (the admin's home-page picks) if there are
+ * any; otherwise ordinary upcoming trips, so the row isn't left empty just
+ * because nothing is featured. */
 async function getRelatedTrips(trip: TripDetail, locale: string): Promise<TripListItem[]> {
-  const fetchUpcoming = (category?: string) =>
+  const bookableUpcoming = (featured: boolean) =>
     backendFetch<Page<TripListItem>>(
-      `/trips${qs({ status: "upcoming", category, page_size: RELATED_SHOWN + 1, locale })}`,
+      // More than we show: this trip and any full ones are dropped below.
+      `/trips${qs({ status: "upcoming", featured: featured || undefined, page_size: 12, locale })}`,
       { next: { revalidate: 300 } }
     )
-      .then((page) => page.items)
+      .then((page) => page.items.filter((t) => t.id !== trip.id && !t.is_full).slice(0, RELATED_SHOWN))
       .catch(() => [] as TripListItem[]);
 
-  const others = (items: TripListItem[]) => items.filter((t) => t.id !== trip.id);
-  const related = others(await fetchUpcoming(trip.categories[0]?.race_category.slug));
-  if (related.length < RELATED_SHOWN) {
-    const seen = new Set(related.map((t) => t.id));
-    related.push(...others(await fetchUpcoming()).filter((t) => !seen.has(t.id)));
-  }
-  return related.slice(0, RELATED_SHOWN);
+  const featured = await bookableUpcoming(true);
+  return featured.length > 0 ? featured : bookableUpcoming(false);
 }
 
 export async function generateMetadata({
@@ -102,7 +100,7 @@ export default async function TripDetailPage({
       </p>
 
       {/* Grid starts at the gallery so the sticky price card's top aligns with the images, not the title */}
-      <div className="mt-8 grid gap-10 lg:grid-cols-[2fr_1fr]">
+      <div className="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-[2fr_1fr] lg:gap-10">
         <div>
           {trip.images.length > 0 && (
             <Reveal>
@@ -147,7 +145,8 @@ export default async function TripDetailPage({
           )}
         </div>
 
-        <div>
+        {/* First on phones (race choice under the title), sidebar from lg up. */}
+        <div className="order-first lg:order-none">
           <BookingWidget tripId={trip.id} categories={trip.categories} isFull={trip.is_full} isBookable={isBookable} />
         </div>
       </div>

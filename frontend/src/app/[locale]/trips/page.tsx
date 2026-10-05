@@ -19,6 +19,9 @@ interface SearchParams {
   page?: string;
 }
 
+const MAX_PAGE = 500;
+const MAX_SEARCH_LENGTH = 80;
+
 export async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {
   const t = await getTranslations({ locale, namespace: "seo" });
   return {
@@ -39,16 +42,23 @@ export default async function TripsPage({
   const t = await getTranslations("trips");
 
   const status = searchParams.status === "past" ? "past" : "upcoming";
-  const page = Number(searchParams.page) || 1;
+  const page = Math.min(Math.max(Math.trunc(Number(searchParams.page)) || 1, 1), MAX_PAGE);
+  const q = searchParams.q?.trim().slice(0, MAX_SEARCH_LENGTH) || undefined;
 
-  const [tripsPage, categories, stats] = await Promise.all([
-    backendFetch<Page<TripListItem>>(
-      `/trips${qs({ status, category: searchParams.category, q: searchParams.q, page, page_size: 12, locale })}`,
-      { next: { revalidate: 60 } }
-    ),
+  const [categories, stats] = await Promise.all([
     backendFetch<RaceCategory[]>(`/race-categories${qs({ locale })}`, { next: { revalidate: 300 } }),
     backendFetch<TripStats>("/trips/stats", { next: { revalidate: 60 } }),
   ]);
+  // Only real categories reach the API (and the cache key).
+  const category = categories.some((c) => c.slug === searchParams.category) ? searchParams.category : undefined;
+
+  // Cache the listings everyone sees. Free-text searches are different for
+  // every visitor: caching them would let anyone fill the data cache with
+  // one entry per made-up search term, so those go straight to the API.
+  const tripsPage = await backendFetch<Page<TripListItem>>(
+    `/trips${qs({ status, category, q, page, page_size: 12, locale })}`,
+    q ? { cache: "no-store" } : { next: { revalidate: 60 } }
+  );
 
   return (
     <div className="py-10 md:py-16">
@@ -56,7 +66,7 @@ export default async function TripsPage({
       <p className="mt-4 max-w-[560px] text-body-lg text-ink-muted">{t("pageSubtitle")}</p>
 
       <div className="mt-8">
-        <FilterBar categories={categories} status={status} category={searchParams.category} q={searchParams.q} />
+        <FilterBar categories={categories} status={status} category={category} q={q} />
       </div>
 
       <p className="mt-6 text-body-sm text-ink-muted">{t("resultsCount", { count: tripsPage.total })}</p>

@@ -26,6 +26,7 @@ interface CategoryRow {
 interface FormValues {
   slug: string;
   cover_image_url: string;
+  external_payment_url: string;
   location_city: string;
   location_country: string;
   start_date: string;
@@ -51,6 +52,7 @@ function toDefaults(trip: TripAdmin | undefined): FormValues {
   return {
     slug: trip?.slug ?? "",
     cover_image_url: trip?.cover_image_url ?? "",
+    external_payment_url: trip?.external_payment_url ?? "",
     location_city: trip?.location_city ?? "",
     location_country: trip?.location_country ?? "",
     start_date: trip?.start_date ?? "",
@@ -95,6 +97,7 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
     const payload = {
       slug: values.slug,
       cover_image_url: values.cover_image_url || null,
+      external_payment_url: values.external_payment_url.trim() || null,
       location_city: values.location_city || null,
       location_country: values.location_country || null,
       start_date: values.start_date,
@@ -202,6 +205,14 @@ export function TripForm({ trip, raceCategories }: { trip?: TripAdmin; raceCateg
                 onUploaded={(url) => setValue("cover_image_url", url, { shouldDirty: true })}
               />
             </div>
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="external_payment_url">External payment link (optional)</Label>
+            <Input id="external_payment_url" type="url" placeholder="https://…" {...register("external_payment_url")} />
+            <p className="mt-1 text-body-sm text-ink-muted">
+              Only used while payments are set to &quot;External payment link&quot; (Payments page). Leave empty to use
+              the default link.
+            </p>
           </div>
         </div>
         <div className="mt-4 flex gap-6">

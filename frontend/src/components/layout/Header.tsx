@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/brand/Logo";
 import type { SVGProps } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -54,11 +55,9 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
           scrolled ? "h-14" : "h-20"
         )}
       >
-        <Link href="/" className="flex items-center gap-2">
-          {/* Full logo (desktop) vs. small mark (mobile) — swap in the real
-              asset once provided; placeholder wordmark for now. */}
-          <span className="hidden text-headline-sm md:inline">ΑΛΛΟΥ</span>
-          <span className="text-headline-sm md:hidden">Α</span>
+        {/* -m-2 p-2 gives the mark a comfortable tap area without moving it. */}
+        <Link href="/" className="-m-2 flex items-center p-2" aria-label="ΑΛΛΟΥ">
+          <LogoMark className={cn("transition-[height] duration-300", scrolled ? "h-8" : "h-10")} />
         </Link>
 
         <nav className="hidden gap-8 md:flex">
@@ -69,7 +68,7 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 md:gap-4">
           <LocaleSwitcher />
           {user ? (
             <>
@@ -79,8 +78,9 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
                 </Link>
                 <LogoutButton className="text-body-md text-ink-muted hover:text-ink" />
               </div>
-              <LogoutButton className="text-ink-muted hover:text-ink md:hidden">
-                <LogOutIcon className="h-5 w-5" />
+              {/* -m-2 p-2: bigger tap area without shifting the layout */}
+              <LogoutButton className="-m-2 p-2 text-ink-muted hover:text-ink md:hidden">
+                <LogOutIcon className="h-7 w-7" />
               </LogoutButton>
             </>
           ) : (
@@ -97,9 +97,9 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
                 type="button"
                 onClick={() => open({ tab: "login" })}
                 aria-label={t("logIn")}
-                className="text-ink-muted hover:text-ink md:hidden"
+                className="-m-2 p-2 text-ink-muted hover:text-ink md:hidden"
               >
-                <LogInIcon className="h-5 w-5" />
+                <LogInIcon className="h-7 w-7" />
               </button>
             </>
           )}

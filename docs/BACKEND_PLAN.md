@@ -368,6 +368,11 @@ DELETE /admin/trip-comments/{id}
 7. Trips that have started, or that the admin marked full
    (`is_full_override`), reject new bookings; retrying checkout cancels the
    user's own earlier `pending` booking for the same trip.
+8. **External payment mode** (admin setting, added later — see
+   `backend/README.md` "Payment mode"): steps 4–6 are replaced by a redirect
+   to an external payment link; the booking waits in `awaiting_payment`
+   until an admin confirms it, or is cancelled after the configured hold
+   period.
 
 ## 8. Background jobs (ARQ)
 

@@ -109,7 +109,36 @@ function applyToResponse(res: NextResponse, session: SessionCookies, outcome: Re
   }
 }
 
+/**
+ * Cross-site request check for the /api route handlers, which act on the
+ * session cookies. SameSite=Lax cookies already keep other sites' POSTs
+ * from carrying a session; this is the second lock: a state-changing
+ * request that a browser says came from another origin is refused outright.
+ * Server-to-server callers (the backend hitting /api/revalidate) send no
+ * Origin header and are unaffected.
+ */
+function isCrossSiteWrite(req: NextRequest): boolean {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return false;
+  if (req.headers.get("sec-fetch-site") === "cross-site") return true;
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  try {
+    return new URL(origin).host !== host;
+  } catch {
+    return true; // malformed Origin (e.g. "null" from a sandboxed frame)
+  }
+}
+
 export default async function middleware(req: NextRequest) {
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    if (isCrossSiteWrite(req)) {
+      return NextResponse.json({ code: "FORBIDDEN", message: "Cross-site request refused" }, { status: 403 });
+    }
+    // Session refresh for API calls happens in the route handlers (on a 401).
+    return NextResponse.next();
+  }
+
   const isAdmin = req.nextUrl.pathname === "/admin" || req.nextUrl.pathname.startsWith("/admin/");
   const session = isAdmin ? ADMIN_SESSION : USER_SESSION;
 
@@ -125,6 +154,6 @@ export default async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Skip API routes (they refresh on their own, on a 401) and static assets.
-  matcher: ["/((?!api|_next|favicon.ico|.*\\..*).*)"],
+  // Everything except Next's own assets and files with an extension.
+  matcher: ["/((?!_next|favicon.ico|.*\\..*).*)"],
 };

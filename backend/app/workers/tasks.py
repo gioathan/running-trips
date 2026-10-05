@@ -8,10 +8,11 @@ from app.core.config import get_settings
 from app.core.i18n import resolve_translation
 from app.db.session import AsyncSessionLocal
 from app.modules.auth.service import build_password_reset_token, build_verify_email_token
-from app.modules.bookings.models import Booking
+from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import release_expired_pending_bookings
 from app.modules.contact.models import ContactMessage
 from app.modules.newsletter.service import build_unsubscribe_token
+from app.modules.payments.settings import external_payment_due_at, external_payment_url, get_payment_settings
 from app.modules.trips.models import Trip
 from app.modules.users.models import User
 from app.workers.email import send_email
@@ -58,6 +59,22 @@ EMAIL_COPY = {
             "<br><br><small>Δεν σας ενδιαφέρει; <a href='{link}'>Διαγραφή</a>.</small>",
         ),
     },
+    "external_payment": {
+        "en": (
+            "Complete your booking for {title}",
+            "We've reserved your place on <strong>{title}</strong> (booking reference <strong>#{booking_id}</strong>)."
+            "<br><br>Payment is handled by our partner office: <a href='{link}'>{link}</a>"
+            "<br><br>Your seats are held until <strong>{due}</strong>. We'll email you as soon as the payment is "
+            "confirmed.",
+        ),
+        "el": (
+            "Ολοκληρώστε την κράτησή σας για {title}",
+            "Κρατήσαμε τη θέση σας για το <strong>{title}</strong> (κωδικός κράτησης <strong>#{booking_id}</strong>)."
+            "<br><br>Η πληρωμή γίνεται μέσω του συνεργαζόμενου γραφείου μας: <a href='{link}'>{link}</a>"
+            "<br><br>Οι θέσεις σας κρατούνται έως <strong>{due}</strong>. Θα σας ενημερώσουμε με email μόλις "
+            "επιβεβαιωθεί η πληρωμή.",
+        ),
+    },
     "contact_ack": {
         "en": ("We received your message", "Thanks for reaching out — our team responds within 24 hours."),
         "el": ("Λάβαμε το μήνυμά σας", "Ευχαριστούμε που επικοινωνήσατε — η ομάδα μας απαντά εντός 24 ωρών."),
@@ -69,10 +86,16 @@ def _send_localized(user: User, kind: str, **params: str) -> None:
     _send_localized_to(user.email, user.locale, kind, **params)
 
 
+def _booking_email(booking: Booking, user: User) -> str:
+    # The booking's own contact email (may differ from the account's);
+    # bookings made before that field existed fall back to the account.
+    return booking.contact_email or user.email
+
+
 def _send_localized_to(email: str, locale: str, kind: str, **params: str) -> None:
     copy = EMAIL_COPY[kind]
     subject, body = copy.get(locale, copy["en"])
-    send_email(email, subject, f"<p>{body.format(**params)}</p>")
+    send_email(email, subject.format(**params), f"<p>{body.format(**params)}</p>")
 
 
 async def send_verification_email(ctx, user_id: int) -> None:
@@ -104,7 +127,30 @@ async def send_booking_confirmation_email(ctx, booking_id: int) -> None:
         trip = await db.get(Trip, booking.trip_id)
         translation = resolve_translation(trip.translations, user.locale)
         title = translation.title if translation else trip.slug
-        _send_localized(user, "booking_confirmed", title=html.escape(title))
+        _send_localized_to(_booking_email(booking, user), user.locale, "booking_confirmed", title=html.escape(title))
+
+
+async def send_external_payment_instructions_email(ctx, booking_id: int) -> None:
+    async with AsyncSessionLocal() as db:
+        booking = await db.get(Booking, booking_id)
+        if booking is None or booking.status != BookingStatus.awaiting_payment:
+            return
+        user = await db.get(User, booking.user_id)
+        trip = await db.get(Trip, booking.trip_id)
+        payment_settings = await get_payment_settings(db)
+        link = external_payment_url(payment_settings, trip.external_payment_url, booking.id)
+        if link is None:
+            return
+        translation = resolve_translation(trip.translations, user.locale)
+        _send_localized_to(
+            _booking_email(booking, user),
+            user.locale,
+            "external_payment",
+            title=html.escape(translation.title if translation else trip.slug),
+            booking_id=str(booking.id),
+            link=html.escape(link, quote=True),
+            due=external_payment_due_at(payment_settings, booking.created_at).strftime("%d/%m/%Y"),
+        )
 
 
 async def send_contact_acknowledgment_email(ctx, user_id: int, message_id: int) -> None:
@@ -131,11 +177,16 @@ async def revalidate_frontend(ctx) -> None:
     app/core/revalidation.py for what triggers it."""
     if not settings.revalidate_secret:
         return
-    async with httpx.AsyncClient(timeout=10) as client:
-        res = await client.post(
-            f"{settings.frontend_origin.rstrip('/')}/api/revalidate",
-            json={"secret": settings.revalidate_secret, "path": "/"},
-        )
+    url = f"{settings.frontend_origin.rstrip('/')}/api/revalidate"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.post(url, json={"secret": settings.revalidate_secret, "path": "/"})
+    except httpx.HTTPError as exc:
+        # A backup path: the admin UI's own proxy already revalidates after
+        # each save. Expected to fail where the worker can't reach the
+        # frontend — e.g. local dev with the backend in Docker.
+        logger.warning("Frontend revalidation could not reach %s: %s", url, type(exc).__name__)
+        return
     if res.status_code >= 400:
         logger.warning("Frontend revalidation failed: %s %s", res.status_code, res.text[:200])
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/brand/Logo";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
@@ -41,7 +42,8 @@ export default function AdminLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-[400px] p-8">
-        <h1 className="text-headline-sm">ΑΛΛΟΥ Admin</h1>
+        <LogoMark className="h-10" />
+        <h1 className="mt-4 text-headline-sm">ΑΛΛΟΥ Admin</h1>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
             <Label htmlFor="email">Email</Label>

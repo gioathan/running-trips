@@ -29,7 +29,9 @@
     "signUp": "Sign up",
     "modalTitle": "Log in or sign up",
     "or": "or",
-    "consent": "By continuing, you agree to our Terms of Service and Privacy Policy."
+    "consent": "By continuing, you agree to our Terms of Service and Privacy Policy.",
+    "logInWithGoogle": "Log in with Google",
+    "signUpWithGoogle": "Sign up with Google"
   },
   "errors": {
     "invalidCredentials": "Incorrect email or password.",
@@ -43,7 +45,11 @@
     "conflict": "That didn't go through — please try again.",
     "generic": "Something went wrong. Please try again.",
     "tripNotBookable": "This trip can no longer be booked.",
-    "adminAccount": "This is an admin account — sign in at /admin/login."
+    "adminAccount": "This is an admin account — sign in at /admin/login.",
+    "useGoogleSignIn": "This email is registered with Google. Use the “Sign in with Google” button instead.",
+    "usePasswordSignIn": "This email is registered with a password. Sign in with your email and password instead.",
+    "googleSignInFailed": "Google sign-in failed. Please try again.",
+    "googleAccountNotRegistered": "There’s no account for this Google account yet. Choose “Sign up” to create one."
   },
   "footer": {
     "subscribeSuccess": "You're subscribed — see you at the start line.",
@@ -81,8 +87,7 @@
     "featured": "Featured",
     "full": "Full",
     "fromPrice": "From €{price}",
-    "viewTrip": "View trip",
-    "notifyWhenAvailable": "Ask to be notified if a spot opens"
+    "viewTrip": "View trip"
   },
   "account": {
     "pageTitle": "My Trips",
@@ -104,7 +109,11 @@
       "confirmed": "Confirmed",
       "cancelled": "Cancelled",
       "refunded": "Refunded"
-    }
+    },
+    "completePayment": "Complete payment",
+    "paymentDue": "Pay by {due}",
+    "bookingRef": "Booking #{id}",
+    "tripRemoved": "No longer offered"
   },
   "home": {
     "featuredTripsHeadline": "Featured expeditions"
@@ -117,7 +126,6 @@
     "phone": "Phone",
     "dateOfBirth": "Date of birth",
     "nationality": "Nationality",
-    "passportNumber": "Passport number",
     "shirtSize": "Shirt size",
     "emergencyContactName": "Emergency contact name",
     "emergencyContactPhone": "Emergency contact phone",
@@ -136,19 +144,47 @@
     "bookingClosed": "Booking closed",
     "commentsHeadline": "What runners said",
     "commentsCount": "{count, plural, one {# comment} other {# comments}}",
-    "relatedHeadline": "More trips like this"
+    "relatedHeadline": "More trips"
   },
   "checkout": {
     "modalTitle": "Complete your booking",
     "totalDue": "Total due: €{total}",
     "participant": "Participant",
-    "fullName": "Full name",
+    "fullName": "Full name (Latin characters)",
     "nationality": "Nationality (optional)",
     "shirtSize": "Shirt size (optional)",
     "continueToPayment": "Continue to payment",
     "paymentFailed": "Payment failed. Please try again.",
     "pay": "Pay now",
-    "success": "You're booked! Redirecting to your trips…"
+    "success": "You're booked! Redirecting to your trips…",
+    "externalHeadline": "Your place is reserved",
+    "externalBody": "Booking reference #{id}. Payment is handled by our partner office — continue there to pay. We hold your seats until {due} and email you once the payment is confirmed.",
+    "externalCta": "Go to payment",
+    "externalLater": "I'll pay later",
+    "contactDetails": "Contact details",
+    "contactEmail": "Email for this booking",
+    "contactEmailHint": "Booking emails go here. Change it if someone else should receive them.",
+    "contactPhone": "Mobile phone",
+    "fullNameHint": "First name and surname as on your ID, e.g. Maria Papadopoulou.",
+    "dateOfBirth": "Date of birth",
+    "gender": "Gender",
+    "select": "Select…",
+    "genders": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "emergencyContact": "Emergency contact (optional)",
+    "emergencyName": "Name",
+    "emergencyPhone": "Phone",
+    "errors": {
+      "required": "This field is required.",
+      "email": "Enter a valid email address.",
+      "phone": "Enter a valid mobile number for the selected country.",
+      "nameLatin": "Use Latin characters only (A–Z).",
+      "nameSurname": "Enter both first name and surname.",
+      "dateOfBirth": "Enter a valid date of birth."
+    }
   },
   "contact": {
     "eyebrow": "Talk to us",

@@ -1,3 +1,5 @@
+import time
+
 from fastapi import FastAPI, Request
 
 from app.core.config import get_settings
@@ -16,10 +18,15 @@ PUBLIC_CONTENT_PREFIXES = (
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 # Coalesces bursts (saving a trip, then adding three images) into one
-# revalidation: arq ignores an enqueue whose job id is already queued, and the
-# short defer gives the burst time to land on that one job.
-REVALIDATE_JOB_ID = "revalidate-frontend"
-REVALIDATE_DEFER_SECONDS = 3
+# revalidation: every write in the same few-second bucket shares a job id,
+# and arq ignores an enqueue whose id it has already seen. The id must
+# change between buckets — arq also remembers *finished* jobs for an hour,
+# so one fixed id would let only the first save of the hour through.
+REVALIDATE_BUCKET_SECONDS = 3
+
+
+def revalidation_job_id(now: float | None = None) -> str:
+    return f"revalidate-frontend:{int((now if now is not None else time.time()) // REVALIDATE_BUCKET_SECONDS)}"
 
 
 def register_revalidation_hook(app: FastAPI) -> None:
@@ -36,7 +43,9 @@ def register_revalidation_hook(app: FastAPI) -> None:
             and request.url.path.startswith(PUBLIC_CONTENT_PREFIXES)
             and response.status_code < 400
         ):
+            # Deferred to the end of the bucket so the job runs after the
+            # last write it stands for.
             await enqueue_email(
-                "revalidate_frontend", _job_id=REVALIDATE_JOB_ID, _defer_by=REVALIDATE_DEFER_SECONDS
+                "revalidate_frontend", _job_id=revalidation_job_id(), _defer_by=REVALIDATE_BUCKET_SECONDS
             )
         return response

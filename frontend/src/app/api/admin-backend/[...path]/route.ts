@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { proxyHeaders } from "@/lib/proxy-headers";
+import { isAllowedAdminProxyPath } from "@/lib/proxy-paths";
 import {
   ADMIN_ACCESS_TOKEN_COOKIE,
   ADMIN_REFRESH_TOKEN_COOKIE,
@@ -10,6 +12,11 @@ import {
 } from "@/lib/cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL;
+
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+// /admin/<resource> whose writes change public pages — keep in step with
+// PUBLIC_CONTENT_PREFIXES in the backend's app/core/revalidation.py.
+const PUBLIC_CONTENT_RESOURCES = new Set(["trips", "trip-comments", "race-categories", "content", "site-settings"]);
 
 /** Same pattern as /api/backend/[...path], for the admin dashboard's own
  * client components — attaches the admin access token (never the regular
@@ -21,8 +28,13 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     return NextResponse.json({ code: "SERVER_MISCONFIGURED", message: "BACKEND_URL not set" }, { status: 500 });
   }
 
+  if (!isAllowedAdminProxyPath(path)) {
+    return NextResponse.json({ code: "NOT_FOUND", message: "Not found" }, { status: 404 });
+  }
+
   const cookieStore = cookies();
-  const targetPath = `/${path.join("/")}${req.nextUrl.search}`;
+  // Segments are re-encoded so nothing in them can alter the backend path.
+  const targetPath = `/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
   const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.text();
 
   const doFetch = (accessToken: string | undefined) =>
@@ -66,6 +78,17 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
   });
+  const retryAfter = upstream.headers.get("retry-after");
+  if (retryAfter) res.headers.set("Retry-After", retryAfter); // tells a rate-limited client when to try again
+
+  // An admin just changed something the public pages show: drop the cached
+  // data now, so the change is visible on the very next page view. Done
+  // here — every admin edit passes through this proxy — rather than relying
+  // only on the backend calling /api/revalidate, which needs the backend to
+  // be able to reach this server (it can't from Docker in local dev).
+  if (upstream.ok && WRITE_METHODS.has(req.method) && PUBLIC_CONTENT_RESOURCES.has(path[1])) {
+    revalidatePath("/", "layout");
+  }
 
   if (refreshedCookies) {
     res.cookies.set(

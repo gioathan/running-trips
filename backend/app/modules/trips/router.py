@@ -7,6 +7,8 @@ from app.modules.trips import service
 from app.modules.trips.schemas import (
     TripAdminRead,
     TripCreate,
+    TripDeletionPreview,
+    TripDeletionResult,
     TripDetail,
     TripImageIn,
     TripInclusionIn,
@@ -66,10 +68,20 @@ async def update_trip(trip_id: int, body: TripUpdate, db: DbSession, current_adm
     return trip
 
 
-@router.delete("/admin/trips/{trip_id}", status_code=204)
+@router.get(
+    "/admin/trips/{trip_id}/deletion-preview",
+    response_model=TripDeletionPreview,
+    dependencies=[Depends(get_current_admin)],
+)
+async def trip_deletion_preview(trip_id: int, db: DbSession):
+    return await service.deletion_preview(db, trip_id)
+
+
+@router.delete("/admin/trips/{trip_id}", response_model=TripDeletionResult)
 async def delete_trip(trip_id: int, db: DbSession, current_admin: User = Depends(get_current_admin)):
-    await service.delete_trip(db, trip_id)
-    await audit_service.record(db, current_admin.id, "delete", "trip", trip_id, {})
+    result = await service.delete_trip(db, trip_id)
+    await audit_service.record(db, current_admin.id, "delete", "trip", trip_id, result.model_dump())
+    return result
 
 
 @router.post("/admin/trips/{trip_id}/images")

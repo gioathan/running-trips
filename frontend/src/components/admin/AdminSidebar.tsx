@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { LogoMark } from "@/components/brand/Logo";
 
 const NAV_SECTIONS = [
   {
@@ -32,8 +33,8 @@ export function AdminSidebar() {
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-ink/10 bg-white p-6 md:block">
-      <Link href="/admin" className="text-headline-sm">
-        Α
+      <Link href="/admin" aria-label="ΑΛΛΟΥ admin" className="inline-block">
+        <LogoMark className="h-8" />
       </Link>
       <nav className="mt-8 space-y-8">
         {NAV_SECTIONS.map((section) => (

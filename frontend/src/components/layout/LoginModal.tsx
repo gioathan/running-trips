@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/brand/Logo";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,7 +38,7 @@ const signupSchema = z
     path: ["confirmPassword"],
   });
 
-function LoginForm({ onDone }: { onDone: () => void }) {
+function LoginForm({ onDone, onLeave }: { onDone: () => void; onLeave: () => void }) {
   const t = useTranslations("auth");
   const tErr = useTranslations("errors");
   const { login } = useAuth();
@@ -71,7 +72,12 @@ function LoginForm({ onDone }: { onDone: () => void }) {
           <Label htmlFor="login-password" className="mb-0">
             {t("passwordLabel")}
           </Label>
-          <Link href="/forgot-password" className="text-label-md text-ink-muted underline">
+          {/* Close the popup too — otherwise it stays open on top of the page it links to. */}
+          <Link
+            href="/forgot-password"
+            onClick={onLeave}
+            className="shrink-0 whitespace-nowrap text-body-sm text-ink-muted underline"
+          >
             {t("forgotPassword")}
           </Link>
         </div>
@@ -161,6 +167,7 @@ export function LoginModal() {
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && close()} title={t("modalTitle")} hideTitle>
+      <LogoMark className="mx-auto mb-6 h-10" />
       <Tabs.Root value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
         <Tabs.List className="mb-6 flex rounded-full bg-surface-low p-1">
           <Tabs.Trigger
@@ -179,7 +186,7 @@ export function LoginModal() {
 
         {GOOGLE_SSO_ENABLED && (
           <>
-            <GoogleSignInButton onSuccess={handleDone} />
+            <GoogleSignInButton intent={tab} />
             <div className="my-6 flex items-center gap-4 text-label-md text-ink-muted">
               <div className="h-px flex-1 bg-ink/10" />
               {t("or")}
@@ -189,7 +196,7 @@ export function LoginModal() {
         )}
 
         <Tabs.Content value="login">
-          <LoginForm onDone={handleDone} />
+          <LoginForm onDone={handleDone} onLeave={close} />
         </Tabs.Content>
         <Tabs.Content value="signup">
           <SignupForm onDone={handleDone} />

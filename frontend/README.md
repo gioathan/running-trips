@@ -82,10 +82,13 @@ for trips, `sitemap.xml` (static pages + every published trip) and
 - **Distance filter is single-select, not multi-select.** The backend's
   `GET /trips?category=` only accepts one slug; extending it to accept
   repeated `category=` params (OR'd) would be the way to add multi-select.
-- **Checkout collects a reduced participant field set**: full name,
-  nationality, shirt size (participant 1 prefilled from the user's name and
-  saved travel profile). Add fields to
-  `components/site/CheckoutModal.tsx`'s `ParticipantForm` as needed.
+- **Checkout collects what race entries and hotels need, not flights**
+  (`components/site/BookingDetailsForm.tsx`): per booking a contact email
+  (defaults to the account's, editable), a mobile number with country code,
+  and an optional emergency contact; per participant the full name in Latin
+  characters, date of birth, gender, and optionally nationality and shirt
+  size. No passport number. Prefilled from the account and travel profile;
+  the same rules are enforced by the API.
 - **Every public page renders per request**, because the layout reads the
   session cookie to render the header. Backend data fetches inside those
   renders are still cached (`next: { revalidate }`) and dropped on admin

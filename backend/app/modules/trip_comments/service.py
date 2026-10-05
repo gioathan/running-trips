@@ -29,6 +29,7 @@ async def list_pending_comment_trips(db: AsyncSession, user: User, locale: str) 
             Booking.user_id == user.id,
             Booking.status == BookingStatus.confirmed,
             Trip.end_date < today,
+            Trip.deleted_at.is_(None),  # a deleted trip has no page for the comment to appear on
             Trip.id.not_in(commented_trip_ids),
         )
         .distinct()
@@ -55,7 +56,7 @@ async def list_pending_comment_trips(db: AsyncSession, user: User, locale: str) 
 async def create_comment(db: AsyncSession, user: User, body: TripCommentCreate) -> TripCommentRead:
     today = datetime.date.today()
     trip = await db.get(Trip, body.trip_id)
-    if trip is None:
+    if trip is None or trip.deleted_at is not None:
         raise NotFoundError("Trip not found.")
     if trip.end_date >= today:
         raise ForbiddenError("You can only comment on a trip after it has ended.")

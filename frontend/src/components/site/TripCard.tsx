@@ -15,15 +15,6 @@ function CheckIcon() {
   );
 }
 
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden>
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  );
-}
-
 export function TripCard({ trip, locale }: { trip: TripListItem; locale: string }) {
   const t = useTranslations("trips");
   const prices = trip.categories.map((c) => c.price).filter((p) => p > 0);
@@ -41,8 +32,11 @@ export function TripCard({ trip, locale }: { trip: TripListItem; locale: string 
               {trip.is_featured && <Chip variant="editorial">{t("featured")}</Chip>}
               {trip.is_full && <Chip variant="highlight">{t("full")}</Chip>}
             </div>
+            {/* White ring + soft drop shadow: the dark pill has to stand out on
+                any photo — the ring separates it from dark images, the shadow
+                lifts it off light ones. */}
             {fromPrice !== null && (
-              <span className="absolute bottom-4 right-4 rounded-full bg-ink px-4 py-1.5 text-label-md text-white shadow-hard">
+              <span className="absolute bottom-4 right-4 rounded-full bg-ink px-4 py-1.5 text-label-md text-white shadow-[0_6px_18px_rgba(0,0,0,0.5)] ring-2 ring-white">
                 {t("fromPrice", { price: fromPrice })}
               </span>
             )}
@@ -83,24 +77,12 @@ export function TripCard({ trip, locale }: { trip: TripListItem; locale: string 
             <DecorativeSparkline seed={trip.slug} className="mt-4 h-6 w-full text-primary/60" />
           </Link>
 
-          <div className="mt-4 flex items-center gap-3">
-            <Link
-              href={`/trips/${trip.slug}`}
-              className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-6 text-label-lg uppercase text-ink transition-shadow hover:shadow-hard"
-            >
-              {t("viewTrip")}
-            </Link>
-            {trip.is_full && (
-              <Link
-                href={{ pathname: "/contact", query: { tripId: trip.id } }}
-                aria-label={t("notifyWhenAvailable")}
-                title={t("notifyWhenAvailable")}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink text-ink-muted hover:border-ink hover:text-ink"
-              >
-                <BellIcon />
-              </Link>
-            )}
-          </div>
+          <Link
+            href={`/trips/${trip.slug}`}
+            className="mt-4 flex h-10 items-center justify-center rounded-full bg-primary px-6 text-label-lg uppercase text-ink transition-shadow hover:shadow-hard"
+          >
+            {t("viewTrip")}
+          </Link>
         </div>
       </div>
     </Card>

@@ -5,7 +5,7 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.payments import service as payments_service
 from app.modules.payments import stripe_client
 from app.modules.payments.models import Payment, PaymentStatus
-from tests.conftest import bearer, make_trip, make_user, use_fake_stripe
+from tests.conftest import bearer, booking_body, make_trip, make_user, use_fake_stripe
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ async def _checkout(client, db):
     booking = (
         await client.post(
             "/bookings",
-            json={"trip_id": trip.id, "trip_category_id": trip.categories[0].id, "participants": [{"full_name": "A"}]},
+            json=booking_body(trip),
             headers=bearer(user),
         )
     ).json()
@@ -122,7 +122,7 @@ async def test_create_intent_without_stripe_key_is_a_clear_503(client, db):
     user = await make_user(db)
     booking = await client.post(
         "/bookings",
-        json={"trip_id": trip.id, "trip_category_id": trip.categories[0].id, "participants": [{"full_name": "A"}]},
+        json=booking_body(trip),
         headers=bearer(user),
     )
     res = await client.post("/payments/create-intent", json={"booking_id": booking.json()["id"]}, headers=bearer(user))

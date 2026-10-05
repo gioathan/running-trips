@@ -4,12 +4,15 @@ export class ApiError extends Error {
   status: number;
   code: string;
   details?: Record<string, unknown>;
+  /** Seconds to wait, from the API's Retry-After header on a 429. */
+  retryAfter?: string;
 
-  constructor(status: number, body: ApiErrorBody) {
+  constructor(status: number, body: ApiErrorBody, retryAfter?: string | null) {
     super(body.message || body.code);
     this.status = status;
     this.code = body.code;
     this.details = body.details;
+    this.retryAfter = retryAfter ?? undefined;
   }
 }
 
@@ -32,11 +35,22 @@ export async function backendFetch<T>(
   path: string,
   init?: RequestInit & { next?: { revalidate?: number | false; tags?: string[] } }
 ): Promise<T> {
+  const headers = new Headers({ "Content-Type": "application/json", ...init?.headers });
+  // Identifies this server to the backend (core/hardening.py), so its own
+  // cached catalogue fetches aren't counted against any visitor's rate
+  // limit. Server-only env var — undefined, and never sent, in a browser.
+  if (process.env.BACKEND_PROXY_SECRET) headers.set("X-Proxy-Secret", process.env.BACKEND_PROXY_SECRET);
+
+  // Anything fetched with a user's or admin's token is that person's data:
+  // never let it into Next's shared data cache, whatever the caller passed
+  // (or forgot to pass).
+  const perUser = headers.has("Authorization");
   const res = await fetch(`${process.env.BACKEND_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...(perUser ? { cache: "no-store" as const, next: undefined } : {}),
+    headers,
   });
-  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res), res.headers.get("retry-after"));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -52,7 +66,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers: { "Content-Type": "application/json", ...init?.headers },
     credentials: "include",
   });
-  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res), res.headers.get("retry-after"));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -65,7 +79,7 @@ export async function adminApiFetch<T>(path: string, init?: RequestInit): Promis
     headers: { "Content-Type": "application/json", ...init?.headers },
     credentials: "include",
   });
-  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res));
+  if (!res.ok) throw new ApiError(res.status, await parseErrorBody(res), res.headers.get("retry-after"));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
