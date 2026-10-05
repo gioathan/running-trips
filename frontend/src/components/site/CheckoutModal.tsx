@@ -93,7 +93,7 @@ export function CheckoutModal({ open, onOpenChange, tripId, tripCategoryId, part
 
     // Neither lookup is essential — whatever fails just isn't prefilled.
     Promise.all([
-      apiFetch<UserPublic & { phone: string | null }>("/users/me").catch(() => null),
+      apiFetch<UserPublic>("/users/me").catch(() => null),
       apiFetch<TravelProfile>("/users/me/travel-profile").catch(() => null),
     ]).then(([account, profile]) => {
       const validPhone = (value: string | null | undefined) => (value && E164_PATTERN.test(value) ? value : "");

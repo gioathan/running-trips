@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 
 /** True once the page has scrolled past `threshold` — drives the header's
- * condensed/sticky-shrink state. Uses hysteresis (separate enter/exit points)
- * so the shrink-induced height change can't flip the state back and forth. */
+ * condensed state. Uses hysteresis (separate enter/exit points) so a finger
+ * resting right at the threshold doesn't toggle it. Whatever reacts to this
+ * must not change the page's height or scroll position in response (the
+ * Header is `fixed` over a constant spacer for exactly that reason). */
 export function useScrolled(threshold = 24): boolean {
   const [scrolled, setScrolled] = useState(false);
   const exitThreshold = Math.max(threshold - 16, 0);

@@ -70,7 +70,7 @@ export function MobileBottomNav() {
   const { open } = useLoginModal();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-around border-t border-ink/10 bg-white md:hidden">
+    <nav className="right-scroll-bar-position fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-around border-t border-ink/10 bg-white md:hidden">
       {ITEMS.map(({ href, key, Icon: ItemIcon }) => (
         <Link
           key={href}
@@ -85,7 +85,7 @@ export function MobileBottomNav() {
         <Link
           href="/account/profile"
           aria-label={t("account")}
-          className={cn("flex items-center justify-center p-3", pathname === "/account/profile" ? "text-ink" : "text-ink-muted")}
+          className={cn("flex items-center justify-center p-3", pathname.startsWith("/account") ? "text-ink" : "text-ink-muted")}
         >
           <AccountIcon className="h-6 w-6" />
         </Link>

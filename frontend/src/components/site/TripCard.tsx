@@ -3,7 +3,6 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { DecorativeSparkline } from "@/components/ui/DecorativeSparkline";
 import { formatDateRange } from "@/lib/format-date";
 import type { TripListItem } from "@/types/api";
 
@@ -73,8 +72,6 @@ export function TripCard({ trip, locale }: { trip: TripListItem; locale: string 
                 ))}
               </ul>
             )}
-            {/* Decorative course-elevation flavor \u2014 not real data, purely visual */}
-            <DecorativeSparkline seed={trip.slug} className="mt-4 h-6 w-full text-primary/60" />
           </Link>
 
           <Link

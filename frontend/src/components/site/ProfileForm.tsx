@@ -1,14 +1,19 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/Button";
-import { Input, Label } from "@/components/ui/Input";
+import { FieldError, Input, Label, NativeSelect } from "@/components/ui/Input";
+import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/lib/toast-context";
 import { apiFetch, ApiError } from "@/lib/api";
 import { errorMessageKey } from "@/lib/error-messages";
-import type { TravelProfile } from "@/types/api";
+import { E164_PATTERN } from "@/lib/phone";
+import type { ShirtSize, TravelProfile } from "@/types/api";
+
+// The same choices as the booking form, so what's saved here can be reused there.
+const SHIRT_SIZES: ShirtSize[] = ["XS", "S", "M", "L", "XL", "XXL"];
 
 interface ProfileFormValues {
   date_of_birth: string;
@@ -22,27 +27,34 @@ export function ProfileForm({ initial }: { initial: TravelProfile }) {
   const t = useTranslations("profile");
   const tErr = useTranslations("errors");
   const { showToast } = useToast();
+  const savedShirt = (initial.shirt_size ?? "").toUpperCase();
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    control,
+    formState: { errors, isSubmitting },
   } = useForm<ProfileFormValues>({
     defaultValues: {
       date_of_birth: initial.date_of_birth ?? "",
       nationality: initial.nationality ?? "",
       emergency_contact_name: initial.emergency_contact_name ?? "",
       emergency_contact_phone: initial.emergency_contact_phone ?? "",
-      shirt_size: initial.shirt_size ?? "",
+      shirt_size: SHIRT_SIZES.includes(savedShirt as ShirtSize) ? savedShirt : "",
     },
   });
+  const today = new Date().toISOString().slice(0, 10);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
       await apiFetch("/users/me/travel-profile", {
         method: "PATCH",
+        // Empty fields are saved as "not set", not as empty text.
         body: JSON.stringify({
-          ...values,
           date_of_birth: values.date_of_birth || null,
+          nationality: values.nationality.trim() || null,
+          emergency_contact_name: values.emergency_contact_name.trim() || null,
+          emergency_contact_phone: values.emergency_contact_phone || null,
+          shirt_size: values.shirt_size || null,
         }),
       });
       showToast(t("saveSuccess"));
@@ -53,26 +65,51 @@ export function ProfileForm({ initial }: { initial: TravelProfile }) {
 
   return (
     <Card className="p-8">
-      <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
+      <h2 className="text-headline-sm">{t("travelDetails")}</h2>
+      <form onSubmit={onSubmit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="dob">{t("dateOfBirth")}</Label>
-          <Input id="dob" type="date" {...register("date_of_birth")} />
+          <Input
+            id="dob"
+            type="date"
+            min="1900-01-01"
+            max={today}
+            {...register("date_of_birth", {
+              validate: (value) => !value || (value >= "1900-01-01" && value < today) || t("dateOfBirthInvalid"),
+            })}
+          />
+          <FieldError>{errors.date_of_birth?.message}</FieldError>
         </div>
         <div>
           <Label htmlFor="nationality">{t("nationality")}</Label>
-          <Input id="nationality" {...register("nationality")} />
+          <Input id="nationality" maxLength={100} {...register("nationality")} />
         </div>
         <div>
           <Label htmlFor="shirt">{t("shirtSize")}</Label>
-          <Input id="shirt" placeholder="M" {...register("shirt_size")} />
+          <NativeSelect id="shirt" {...register("shirt_size")}>
+            <option value="">{t("select")}</option>
+            {SHIRT_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </NativeSelect>
         </div>
         <div>
           <Label htmlFor="ec_name">{t("emergencyContactName")}</Label>
-          <Input id="ec_name" {...register("emergency_contact_name")} />
+          <Input id="ec_name" maxLength={255} {...register("emergency_contact_name")} />
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <Label htmlFor="ec_phone">{t("emergencyContactPhone")}</Label>
-          <Input id="ec_phone" {...register("emergency_contact_phone")} />
+          <Controller
+            control={control}
+            name="emergency_contact_phone"
+            rules={{ validate: (value) => !value || E164_PATTERN.test(value) || t("phoneInvalid") }}
+            render={({ field }) => (
+              <PhoneInput id="ec_phone" value={field.value} onChange={field.onChange} onBlur={field.onBlur} className="sm:max-w-[calc(50%-0.5rem)]" />
+            )}
+          />
+          <FieldError>{errors.emergency_contact_phone?.message}</FieldError>
         </div>
         <div className="sm:col-span-2">
           <Button type="submit" variant="primary" disabled={isSubmitting}>

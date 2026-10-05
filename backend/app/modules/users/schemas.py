@@ -1,6 +1,14 @@
 import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _blank_to_none(value):
+    """An emptied form field means "not set", not an empty string."""
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return value
 
 
 class UserRead(BaseModel):
@@ -15,10 +23,14 @@ class UserRead(BaseModel):
     email_verified: bool
 
 
+# Lengths match the columns (users/models.py): anything longer used to reach
+# the database and come back as a 500 instead of a validation error.
 class UserUpdate(BaseModel):
-    full_name: str | None = None
-    phone: str | None = None
+    full_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
     locale: str | None = None
+
+    _blank = field_validator("full_name", "phone", mode="before")(_blank_to_none)
 
 
 class TravelProfileRead(BaseModel):
@@ -35,9 +47,13 @@ class TravelProfileRead(BaseModel):
 
 class TravelProfileUpdate(BaseModel):
     date_of_birth: datetime.date | None = None
-    nationality: str | None = None
-    passport_number: str | None = None
-    emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
-    shirt_size: str | None = None
+    nationality: str | None = Field(default=None, max_length=100)
+    passport_number: str | None = Field(default=None, max_length=50)
+    emergency_contact_name: str | None = Field(default=None, max_length=255)
+    emergency_contact_phone: str | None = Field(default=None, max_length=50)
+    shirt_size: str | None = Field(default=None, max_length=10)
     extra: dict | None = None
+
+    _blank = field_validator(
+        "nationality", "passport_number", "emergency_contact_name", "emergency_contact_phone", "shirt_size", mode="before"
+    )(_blank_to_none)

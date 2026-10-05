@@ -1,7 +1,7 @@
 "use client";
 
 import { LogoMark } from "@/components/brand/Logo";
-import type { SVGProps } from "react";
+import { useEffect, useRef, useState, type SVGProps } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { LocaleSwitcher } from "./LocaleSwitcher";
@@ -44,11 +44,32 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
   const { open } = useLoginModal();
   const scrolled = useScrolled();
 
+  // The header collapses (shorter bar, ribbon hidden) once the page scrolls.
+  // If it sat in the page's flow, every collapse/expand would change the
+  // page's height and with it the scroll position — which is the very thing
+  // deciding whether it's collapsed, so it flickered open/closed around the
+  // threshold. So the header is `fixed` (takes no space), and this spacer
+  // reserves its *expanded* height permanently. Its size changes can no
+  // longer move the page. The expanded height is measured, with a matching
+  // static fallback for the first paint (80px bar + 30px ribbon + 1px border).
+  const headerRef = useRef<HTMLElement>(null);
+  const [expandedHeight, setExpandedHeight] = useState<number | null>(null);
+  useEffect(() => {
+    // Only on load at the very top, when the header is fully expanded and
+    // not mid-animation. Otherwise the fallback height stays.
+    if (window.scrollY === 0 && headerRef.current) setExpandedHeight(headerRef.current.offsetHeight);
+  }, []);
+
   return (
-    // overflow-anchor:none stops Chrome's scroll-anchoring from "correcting" scrollY when this
-    // header's height animates, which was re-triggering useScrolled and causing content to
-    // jump/cut and reappear while scrolling.
-    <header className="sticky top-0 z-40 border-b border-ink/10 bg-canvas/95 backdrop-blur [overflow-anchor:none]">
+    <>
+    <div aria-hidden className="h-[111px]" style={expandedHeight ? { height: expandedHeight } : undefined} />
+    <header
+      ref={headerRef}
+      // right-scroll-bar-position: while a popup is open the page's scrollbar is
+      // hidden; this keeps the bar where it was instead of jumping sideways into
+      // the freed space (the popup library looks for this class name).
+      className="right-scroll-bar-position fixed inset-x-0 top-0 z-40 border-b border-ink/10 bg-canvas/95 backdrop-blur"
+    >
       <div
         className={cn(
           "mx-auto flex max-w-[1280px] items-center justify-between px-4 transition-[height] duration-300 md:px-8",
@@ -73,8 +94,10 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
           {user ? (
             <>
               <div className="hidden items-center gap-4 md:flex">
-                <Link href="/account" className="text-body-md hover:text-primary">
-                  {t("myTrips")}
+                {/* Same destination as the account icon in the phone's bottom bar;
+                    "My trips" is one tap from there. */}
+                <Link href="/account/profile" className="text-body-md hover:text-primary">
+                  {t("profile")}
                 </Link>
                 <LogoutButton className="text-body-md text-ink-muted hover:text-ink" />
               </div>
@@ -118,5 +141,6 @@ export function Header({ marqueeItems }: { marqueeItems?: string[] }) {
         </div>
       </div>
     </header>
+    </>
   );
 }

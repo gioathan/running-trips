@@ -16,7 +16,8 @@ export function Hero({ data }: { data: HeroData }) {
         )}
         <h1 className="mt-4 text-headline-xl-mobile md:text-headline-xl">{data.headline}</h1>
         {data.body && <p className="mt-6 max-w-[560px] text-body-lg text-ink-muted">{data.body}</p>}
-        <div className="mt-8 flex flex-wrap gap-4">
+        {/* Tighter on phones, where the two buttons wrap onto separate lines. */}
+        <div className="mt-8 flex flex-wrap gap-2 sm:gap-4">
           {data.primaryCta && (
             <ButtonLink href={data.primaryCta.href} variant="primary">
               {data.primaryCta.label}

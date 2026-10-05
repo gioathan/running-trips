@@ -144,7 +144,7 @@ export function BookingWidget({
       {/* bottom-16 sits on top of MobileBottomNav (h-16, below md); from md up there's no bottom nav */}
       <div
         data-mobile-booking-bar
-        className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-4 border-t border-ink/10 bg-white px-4 py-3 shadow-hard md:bottom-0 lg:hidden"
+        className="right-scroll-bar-position fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-4 border-t border-ink/10 bg-white px-4 py-3 shadow-hard md:bottom-0 lg:hidden"
       >
         {/* The selected race and what it costs — not just a "from" price —
             so switching race above visibly changes what "Book now" books. */}

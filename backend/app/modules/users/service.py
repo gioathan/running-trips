@@ -29,6 +29,8 @@ async def get_or_create_travel_profile(db: AsyncSession, user_id: int) -> UserTr
 async def update_travel_profile(db: AsyncSession, user_id: int, patch: TravelProfileUpdate) -> UserTravelProfile:
     profile = await get_or_create_travel_profile(db, user_id)
     for field, value in patch.model_dump(exclude_unset=True).items():
+        if field == "extra" and value is None:
+            continue  # the column is NOT NULL; "no extras" is an empty object
         setattr(profile, field, value)
     await db.commit()
     await db.refresh(profile)

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { localizedAlternates } from "@/lib/seo";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { backendFetch, qs } from "@/lib/api";
+import { redirect } from "@/i18n/navigation";
 import { TripCard } from "@/components/site/TripCard";
 import { FilterBar } from "@/components/site/FilterBar";
 import { UrlPagination } from "@/components/site/UrlPagination";
@@ -17,6 +18,15 @@ interface SearchParams {
   category?: string;
   q?: string;
   page?: string;
+}
+
+/** The filters as URL query, leaving out the defaults. */
+function queryOf(f: { status: string; category?: string; q?: string }): Record<string, string> {
+  return {
+    ...(f.status === "past" ? { status: "past" } : {}),
+    ...(f.category ? { category: f.category } : {}),
+    ...(f.q ? { q: f.q } : {}),
+  };
 }
 
 const MAX_PAGE = 500;
@@ -59,6 +69,13 @@ export default async function TripsPage({
     `/trips${qs({ status, category, q, page, page_size: 12, locale })}`,
     q ? { cache: "no-store" } : { next: { revalidate: 60 } }
   );
+
+  // A page number past the end (an old link, or trips removed since) would
+  // show "no trips match" although there are trips — go to the last real page.
+  const lastPage = Math.max(1, Math.ceil(tripsPage.total / tripsPage.page_size));
+  if (page > lastPage) {
+    redirect({ href: { pathname: "/trips", query: { ...queryOf({ status, category, q }), page: lastPage } }, locale });
+  }
 
   return (
     <div className="py-10 md:py-16">

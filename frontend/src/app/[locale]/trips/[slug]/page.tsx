@@ -104,7 +104,7 @@ export default async function TripDetailPage({
         <div>
           {trip.images.length > 0 && (
             <Reveal>
-              <TripGallery images={trip.images} />
+              <TripGallery images={trip.images} title={trip.title} />
             </Reveal>
           )}
 

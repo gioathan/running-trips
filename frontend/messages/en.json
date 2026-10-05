@@ -11,6 +11,7 @@
     "browseTrips": "Browse Trips",
     "ourServices": "Our Services",
     "account": "Account",
+    "profile": "My profile",
     "logOutConfirmTitle": "Log out?",
     "logOutConfirmBody": "You'll need to log in again to access your account.",
     "cancel": "Cancel"
@@ -119,9 +120,15 @@
     "featuredTripsHeadline": "Featured expeditions"
   },
   "profile": {
-    "pageTitle": "Travel profile",
+    "pageTitle": "My profile",
     "pageSubtitle": "A few details we'll need on race day — fill these in once and we'll reuse them for every booking.",
     "basicInfo": "Basic info",
+    "travelDetails": "Race & travel details",
+    "email": "Email",
+    "emailHint": "The address you sign in with. It can't be changed here.",
+    "phoneInvalid": "Enter a valid mobile number for the selected country.",
+    "dateOfBirthInvalid": "Enter a valid date of birth.",
+    "select": "Select…",
     "fullName": "Full name",
     "phone": "Phone",
     "dateOfBirth": "Date of birth",
@@ -144,7 +151,18 @@
     "bookingClosed": "Booking closed",
     "commentsHeadline": "What runners said",
     "commentsCount": "{count, plural, one {# comment} other {# comments}}",
-    "relatedHeadline": "More trips"
+    "relatedHeadline": "More trips",
+    "gallery": {
+      "openPhoto": "Open photo {n} of {total}",
+      "showMore": "{count, plural, one {Show # more photo} other {Show # more photos}}",
+      "viewerTitle": "Photos of {title}",
+      "photoAlt": "{title} — photo {n} of {total}",
+      "loading": "Loading photo",
+      "loadError": "This photo couldn't be loaded.",
+      "close": "Close",
+      "previous": "Previous photo",
+      "next": "Next photo"
+    }
   },
   "checkout": {
     "modalTitle": "Complete your booking",

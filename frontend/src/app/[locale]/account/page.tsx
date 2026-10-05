@@ -4,6 +4,7 @@ import { backendFetch, qs } from "@/lib/api";
 import { requireUser } from "@/lib/auth-server";
 import { AccountTripsTabs } from "@/components/site/AccountTripsTabs";
 import { PendingCommentsSection } from "@/components/site/PendingCommentsSection";
+import { ButtonLink } from "@/components/ui/Button";
 import type { Booking, Page, PendingTripComment } from "@/types/api";
 
 // Identity/booking data — never cached (BACKEND_PLAN.md's Next.js caching split).
@@ -18,6 +19,7 @@ export default async function AccountPage({
 }) {
   setRequestLocale(locale);
   const t = await getTranslations("account");
+  const tNav = await getTranslations("nav");
   const session = await requireUser();
   if (!session) {
     redirect({ href: "/", locale });
@@ -38,7 +40,12 @@ export default async function AccountPage({
 
   return (
     <div className="py-10 md:py-16">
-      <h1 className="text-headline-lg-mobile md:text-headline-lg">{t("pageTitle")}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <h1 className="text-headline-lg-mobile md:text-headline-lg">{t("pageTitle")}</h1>
+        <ButtonLink href="/account/profile" variant="ghost" size="sm">
+          {tNav("profile")}
+        </ButtonLink>
+      </div>
       <p className="mt-2 text-body-md text-ink-muted">{t("greeting", { name: session.user.full_name ?? session.user.email })}</p>
 
       <div className="mt-8">
